@@ -3,5 +3,17 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "CLI for reading/writing project.json and exporting md. Not implemented yet."
+  "description": "CLI for reading/writing project.json and exporting md.",
+  "bin": {
+    "scenario": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@scenario/core": "workspace:*",
+    "zod": "^3.23.8"
+  }
 }

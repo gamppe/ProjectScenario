@@ -127,6 +127,12 @@ describe("computeRollup", () => {
     expect(r["vision"]).toBe("blocked");
   });
 
+  it("keeps a parent in_progress when its own status is ahead of its done children", () => {
+    const r = computeRollup(parseSpec(example()));
+    // screen-list is in_progress itself; its only child (int-add) is done
+    expect(r["screen-list"]).toBe("in_progress");
+  });
+
   it("is planned when every child is planned", () => {
     const d = example();
     for (const n of d.nodes!) n.status = "planned";

@@ -4,10 +4,11 @@ import type { ProjectSpec } from "./spec.js";
 /**
  * Effective status of every node, using "contains" edges.
  *
- * A node with children takes its status from them:
- *  - blocked if it, or any child, is blocked
- *  - done if every child is done
- *  - in_progress if some child is in_progress or done
+ * A node with children combines their statuses with its own (own "planned"
+ * is ignored, since that is the default):
+ *  - blocked if any input is blocked
+ *  - done if every input is done
+ *  - in_progress if some input is in_progress or done
  *  - planned otherwise
  * A leaf keeps its own status.
  *
@@ -31,10 +32,14 @@ export function computeRollup(spec: ProjectSpec): Record<string, Status> {
     if (!kids || kids.length === 0) {
       status = self;
     } else {
-      const sub = kids.map(resolve);
-      if (self === "blocked" || sub.includes("blocked")) status = "blocked";
-      else if (sub.every((s) => s === "done")) status = "done";
-      else if (sub.some((s) => s === "in_progress" || s === "done")) status = "in_progress";
+      // The node's own status counts too once someone has set it past "planned",
+      // so a screen marked in_progress is not reported done just because its
+      // only interaction is.
+      const inputs = kids.map(resolve);
+      if (self !== "planned") inputs.push(self);
+      if (inputs.includes("blocked")) status = "blocked";
+      else if (inputs.every((s) => s === "done")) status = "done";
+      else if (inputs.some((s) => s === "in_progress" || s === "done")) status = "in_progress";
       else status = "planned";
     }
     result[id] = status;
