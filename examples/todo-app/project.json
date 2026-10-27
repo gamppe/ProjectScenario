@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "name": "Simple Todo",
+    "description": "Sample project used to exercise the schema.",
+    "outputLanguage": "en",
+    "createdAt": "2026-10-28T00:00:00.000Z"
+  },
+  "nodes": [
+    {
+      "id": "vision",
+      "type": "vision",
+      "title": "Simple Todo",
+      "problem": "Existing todo apps are too heavy for quick daily lists.",
+      "goals": ["Capture a task in under 3 seconds"],
+      "nonGoals": ["Team collaboration", "Cloud sync"],
+      "status": "in_progress"
+    },
+    {
+      "id": "persona-solo",
+      "type": "persona",
+      "title": "Solo professional",
+      "jobsToBeDone": ["Remember what to do today"]
+    },
+    {
+      "id": "feat-tasks",
+      "type": "feature",
+      "title": "Manage tasks",
+      "priority": "must",
+      "inMvp": true
+    },
+    {
+      "id": "feat-reminders",
+      "type": "feature",
+      "title": "Reminders",
+      "priority": "could",
+      "inMvp": false,
+      "provenance": {
+        "source": "ai",
+        "rationale": "User skipped scope question; reminders are commonly expected but not essential for MVP.",
+        "decidedAt": "2026-10-28T09:00:00.000Z",
+        "reviewed": false
+      }
+    },
+    {
+      "id": "story-add-task",
+      "type": "story",
+      "title": "Add a task",
+      "asA": "solo professional",
+      "iWant": "to add a task with one keystroke",
+      "soThat": "I do not lose my train of thought",
+      "acceptance": [
+        {
+          "given": "the list screen is open",
+          "when": "I type a title and press Enter",
+          "then": "the task appears at the top of the list"
+        }
+      ],
+      "status": "done"
+    },
+    {
+      "id": "screen-list",
+      "type": "screen",
+      "title": "Task list",
+      "route": "/",
+      "states": [
+        { "name": "default" },
+        { "name": "empty", "description": "Show a prompt to add the first task" },
+        { "name": "error", "description": "Storage failed to load" }
+      ],
+      "status": "in_progress"
+    },
+    {
+      "id": "screen-detail",
+      "type": "screen",
+      "title": "Task detail",
+      "route": "/task/:id",
+      "status": "planned"
+    },
+    {
+      "id": "int-add",
+      "type": "interaction",
+      "title": "Quick add",
+      "trigger": "Press Enter in the input",
+      "result": "Create task and clear the input",
+      "status": "done"
+    },
+    {
+      "id": "flow-main",
+      "type": "flow",
+      "title": "Main flow"
+    },
+    {
+      "id": "ent-task",
+      "type": "entity",
+      "title": "Task",
+      "fields": [
+        { "name": "id", "type": "string" },
+        { "name": "title", "type": "string" },
+        { "name": "done", "type": "boolean" },
+        { "name": "dueAt", "type": "datetime", "required": false }
+      ]
+    },
+    {
+      "id": "dec-stack",
+      "type": "decision",
+      "title": "Tech stack",
+      "category": "framework",
+      "choice": "React + Vite + localStorage",
+      "alternatives": ["SvelteKit", "Electron + SQLite"],
+      "rationale": "Fastest path to a working local app."
+    },
+    {
+      "id": "task-list-ui",
+      "type": "task",
+      "title": "Build list UI",
+      "order": 1,
+      "doneWhen": ["Adding a task shows it in the list"],
+      "status": "in_progress"
+    },
+    {
+      "id": "task-storage",
+      "type": "task",
+      "title": "Persist tasks to localStorage",
+      "order": 2,
+      "status": "blocked"
+    },
+    {
+      "id": "risk-data-loss",
+      "type": "risk",
+      "title": "Data loss on cleared browser storage",
+      "likelihood": "medium",
+      "impact": "high",
+      "mitigation": "Add JSON export in a later milestone."
+    }
+  ],
+  "edges": [
+    { "from": "vision", "to": "feat-tasks", "kind": "contains" },
+    { "from": "vision", "to": "feat-reminders", "kind": "contains" },
+    { "from": "feat-tasks", "to": "story-add-task", "kind": "contains" },
+    { "from": "feat-tasks", "to": "screen-list", "kind": "contains" },
+    { "from": "feat-tasks", "to": "screen-detail", "kind": "contains" },
+    { "from": "screen-list", "to": "int-add", "kind": "contains" },
+    { "from": "screen-list", "to": "screen-detail", "kind": "navigates", "label": "Tap a task" },
+    { "from": "screen-detail", "to": "screen-list", "kind": "navigates", "label": "Back" },
+    { "from": "screen-list", "to": "ent-task", "kind": "uses_data" },
+    { "from": "task-list-ui", "to": "feat-tasks", "kind": "implements" },
+    { "from": "task-storage", "to": "task-list-ui", "kind": "depends_on" },
+    { "from": "task-storage", "to": "dec-stack", "kind": "relates" }
+  ],
+  "answers": [
+    {
+      "questionId": "problem-statement",
+      "state": "answered",
+      "value": "Existing todo apps are too heavy for quick daily lists.",
+      "provenance": { "source": "user", "reviewed": true },
+      "nodeIds": ["vision"]
+    },
+    {
+      "questionId": "scope-mvp",
+      "state": "ai_decided",
+      "value": ["feat-tasks"],
+      "provenance": {
+        "source": "ai",
+        "rationale": "User skipped; core task CRUD is the smallest useful product.",
+        "decidedAt": "2026-10-28T09:00:00.000Z",
+        "reviewed": false
+      },
+      "nodeIds": ["feat-tasks", "feat-reminders"]
+    },
+    {
+      "questionId": "risks-main",
+      "state": "skipped",
+      "provenance": { "source": "user", "reviewed": false }
+    }
+  ]
+}

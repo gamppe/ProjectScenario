@@ -1,0 +1,7 @@
+{
+  "name": "@scenario/adapters",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Import/export adapters (Mermaid, Figma, GitHub, ...). Not implemented yet."
+}

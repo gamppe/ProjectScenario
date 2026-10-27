@@ -1,0 +1,7 @@
+{
+  "name": "@scenario/mcp",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "MCP server exposing the spec to AI agents. Not implemented yet."
+}

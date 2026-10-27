@@ -1,0 +1,7 @@
+{
+  "name": "@scenario/cli",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "CLI for reading/writing project.json and exporting md. Not implemented yet."
+}
