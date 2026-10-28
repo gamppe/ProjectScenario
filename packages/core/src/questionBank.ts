@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { QuestionSchema, type Question } from "./questions.js";
+import { QuestionSchema, type AnswerValue, type Question } from "./questions.js";
 
 /**
  * Built-in question bank, grouped by planning stage (see brief §6).
@@ -12,30 +12,34 @@ const raw: z.input<typeof QuestionSchema>[] = [
   // 1. 문제 정의
   {
     id: "problem-statement",
+    short: "해결할 문제",
     stage: "problem",
     importance: "P0",
     prompt: "이 프로젝트는 누구의 어떤 문제를 해결하나요?",
-    hint: "한두 문장으로. 해결책이 아니라 문제부터 적어주세요.",
-    examples: ["기존 할 일 앱은 너무 무거워서 빠른 메모용으로 쓰기 어렵다."],
+    hint: "해결 방법보다 사용자가 겪는 문제를 한두 문장으로 적어주세요.",
+    examples: ["자영업자는 예약 전화를 받느라 손님 응대에 집중하기 어렵다."],
   },
   {
     id: "problem-goals",
+    short: "핵심 목표",
     stage: "problem",
     importance: "P0",
     kind: "list",
-    prompt: "이 프로젝트의 핵심 목표 1~3개는 무엇인가요?",
-    examples: ["할 일을 3초 안에 추가한다"],
+    prompt: "이 프로젝트에서 이루고 싶은 핵심 목표는 무엇인가요?",
+    examples: ["손님이 온라인으로 예약할 수 있다","예약 확인에 걸리는 시간을 줄인다"],
   },
   {
     id: "problem-success",
+    short: "성공 기준",
     stage: "problem",
     importance: "P1",
     kind: "list",
-    prompt: "성공했다고 판단할 기준은 무엇인가요?",
-    hint: "가능하면 확인할 수 있는 형태로.",
+    prompt: "프로젝트가 성공했는지 어떤 기준으로 판단하나요?",
+    hint: "가능하면 숫자나 직접 확인할 수 있는 결과로 적어주세요.",
   },
   {
     id: "problem-why-now",
+    short: "시작 이유",
     stage: "problem",
     importance: "P2",
     prompt: "왜 지금 이 프로젝트를 시작하나요?",
@@ -44,189 +48,203 @@ const raw: z.input<typeof QuestionSchema>[] = [
   // 2. 사용자 정의
   {
     id: "users-who",
+    short: "주요 사용자",
     stage: "users",
     importance: "P0",
     kind: "list",
-    prompt: "주요 사용자는 누구인가요?",
-    examples: ["혼자 일하는 프리랜서", "AI 에이전트로 개발하는 1인 개발자"],
+    prompt: "이 제품을 주로 사용할 사람은 누구인가요?",
+    examples: ["혼자 일하는 프리랜서","동네 식당 운영자"],
   },
   {
     id: "users-jobs",
+    short: "사용자 목적",
     stage: "users",
     importance: "P1",
     kind: "list",
-    prompt: "그 사용자가 이 제품으로 해내고 싶은 일은 무엇인가요?",
+    prompt: "주요 사용자는 이 제품으로 어떤 일을 해내고 싶어 하나요?",
     when: { questionId: "users-who" },
   },
   {
     id: "users-context",
+    short: "사용 상황",
     stage: "users",
     importance: "P2",
-    prompt: "어떤 상황에서, 얼마나 자주 쓰게 되나요?",
+    prompt: "주요 사용자는 어떤 상황에서 이 제품을 사용하나요?",
     when: { questionId: "users-who" },
   },
 
   // 3. 경쟁 조사
   {
     id: "competition-similar",
+    short: "참고 제품",
     stage: "competition",
     importance: "P2",
     kind: "list",
-    prompt: "비슷한 제품이나 참고할 만한 앱이 있나요?",
+    prompt: "비슷하거나 참고하고 싶은 제품이 있나요?",
   },
   {
     id: "competition-diff",
+    short: "제품 차별점",
     stage: "competition",
     importance: "P1",
-    prompt: "그 제품들과 다른 점은 무엇인가요?",
+    prompt: "이 프로젝트는 앞서 적은 제품들과 어떤 점이 다른가요?",
     when: { questionId: "competition-similar" },
   },
 
   // 4. 범위 설정
   {
     id: "scope-mvp",
+    short: "첫 버전 필수 기능",
     stage: "scope",
     importance: "P0",
     kind: "list",
-    prompt: "첫 버전(MVP)에 반드시 들어가야 할 기능은 무엇인가요?",
-    hint: "없으면 첫 버전이 의미 없는 것만 적어주세요.",
+    prompt: "첫 버전에 반드시 들어가야 할 기능은 무엇인가요?",
+    hint: "없으면 첫 버전의 목적을 달성하기 어려운 기능만 적어주세요.",
   },
   {
     id: "scope-nongoals",
+    short: "만들지 않을 것",
     stage: "scope",
     importance: "P0",
     kind: "list",
-    prompt: "이번에 하지 않을 것(Non-goals)은 무엇인가요?",
-    hint: "AI 에이전트가 시키지 않은 기능까지 만드는 것을 막아줍니다.",
-    examples: ["팀 협업", "클라우드 동기화"],
+    prompt: "이번에 만들지 않을 기능이나 범위는 무엇인가요?",
+    hint: "AI가 요청하지 않은 기능까지 만드는 것을 막는 데 도움이 돼요.",
+    examples: ["팀 협업","클라우드 동기화"],
   },
   {
     id: "scope-should",
+    short: "나중에 만들 기능",
     stage: "scope",
     importance: "P1",
     kind: "list",
-    prompt: "있으면 좋지만 MVP 이후로 미뤄도 되는 기능은 무엇인가요?",
+    prompt: "있으면 좋지만 첫 버전 이후로 미뤄도 되는 기능은 무엇인가요?",
   },
 
-  // 5. 사용자 스토리
+  // 5. 요구사항
   {
     id: "stories-core",
+    short: "핵심 행동",
     stage: "stories",
     importance: "P0",
     kind: "list",
-    prompt: "사용자가 가장 자주 하는 핵심 행동 2~3가지를 순서대로 적어주세요.",
-    examples: ["앱을 열고 → 할 일을 입력하고 → 완료로 체크한다"],
+    prompt: "사용자가 핵심 목적을 이루기 위해 가장 자주 하는 행동 2~3가지를 순서대로 적어주세요.",
+    examples: ["가게를 찾는다 → 날짜를 고른다 → 예약한다"],
   },
   {
     id: "stories-acceptance",
+    short: "행동 완료 기준",
     stage: "stories",
     importance: "P1",
-    prompt: "핵심 행동마다 '이렇게 되면 완료'라고 볼 기준은 무엇인가요?",
-    hint: "상황 → 행동 → 결과 형태로 적으면 좋습니다.",
+    prompt: "각 핵심 행동이 제대로 완료됐다고 볼 기준은 무엇인가요?",
+    hint: "어떤 상황에서 어떤 행동을 했을 때 어떤 결과가 나와야 하는지 적어주세요.",
     when: { questionId: "stories-core" },
   },
   {
     id: "stories-edge",
+    short: "예외 상황",
     stage: "stories",
     importance: "P2",
     kind: "list",
-    prompt: "예외 상황이나 드문 사용 방식이 있나요?",
+    prompt: "예상되는 예외 상황이나 드문 사용 방식은 무엇인가요?",
   },
 
   // 6. 정보 구조
   {
     id: "ia-screens",
+    short: "화면 목록",
     stage: "ia",
     importance: "P0",
     kind: "list",
-    prompt: "필요한 화면(페이지)을 모두 나열해주세요.",
-    examples: ["목록", "상세", "설정"],
+    prompt: "필요한 화면을 모두 적어주세요.",
+    examples: ["예약 목록","예약 상세","설정"],
   },
   {
     id: "ia-nav",
+    short: "화면 이동 방식",
     stage: "ia",
     importance: "P1",
     kind: "choice",
-    prompt: "화면 사이 이동은 어떤 방식인가요?",
+    prompt: "사용자는 화면 사이를 주로 어떤 방식으로 이동하나요?",
     choices: [
-      { value: "single", label: "단일 화면" },
-      { value: "sidebar", label: "사이드바" },
-      { value: "tabs", label: "상단/하단 탭" },
-      { value: "stack", label: "화면 쌓기(뒤로가기)" },
+      { value: "single", label: "한 화면만 사용" },
+      { value: "sidebar", label: "옆쪽 메뉴" },
+      { value: "tabs", label: "위쪽 또는 아래쪽 탭" },
+      { value: "stack", label: "화면을 열고 뒤로 가기" },
     ],
   },
   {
     id: "ia-auth",
+    short: "로그인 필요",
     stage: "ia",
     importance: "P1",
     kind: "boolean",
-    prompt: "로그인이 필요한가요?",
+    prompt: "이 제품을 사용하려면 로그인이 필요한가요?",
   },
   {
     id: "ia-auth-method",
+    short: "로그인 방식",
     stage: "ia",
     importance: "P1",
-    prompt: "로그인 방식은 무엇인가요?",
+    prompt: "사용자는 어떤 방식으로 로그인하나요?",
+    examples: ["이메일과 비밀번호","구글 계정"],
     when: { questionId: "ia-auth", equals: true },
-    examples: ["이메일+비밀번호", "소셜 로그인"],
   },
 
-  // 7. 사용자 플로우
+  // 7. 사용 흐름
   {
     id: "flows-main",
+    short: "주요 사용 흐름",
     stage: "flows",
     importance: "P0",
-    prompt: "처음 실행해서 핵심 목적을 달성하기까지 어떤 순서로 화면을 거치나요?",
-    examples: ["목록 → (입력) → 목록에 추가됨 → 상세 → 완료 처리"],
+    prompt: "처음 실행한 뒤 핵심 목적을 달성할 때까지 어떤 순서로 화면을 거치나요?",
+    examples: ["가게 목록 → 가게 상세 → 예약 화면 → 예약 완료 화면"],
   },
   {
     id: "flows-onboarding",
+    short: "첫 사용 안내",
     stage: "flows",
     importance: "P1",
-    prompt: "처음 사용하는 사람에게 필요한 안내나 설정 단계가 있나요?",
+    prompt: "처음 사용하는 사람에게 필요한 안내나 설정 단계는 무엇인가요?",
   },
   {
     id: "flows-error",
+    short: "실패·이탈 처리",
     stage: "flows",
     importance: "P2",
-    prompt: "흐름이 실패하거나 중간에 이탈하면 어떻게 되나요?",
+    prompt: "사용 중 실패하거나 중간에 그만두면 어떻게 처리하나요?",
   },
 
-  // 8. 와이어프레임
+  // 8. 화면 구성
   {
     id: "wireframes-style",
+    short: "화면 정보 밀도",
     stage: "wireframes",
     importance: "P1",
     kind: "choice",
-    prompt: "화면의 전체적인 밀도와 느낌은 어떤가요?",
+    prompt: "화면에 정보를 얼마나 빽빽하게 배치하고 싶나요?",
     choices: [
-      { value: "minimal", label: "여백 많은 미니멀" },
-      { value: "dense", label: "정보가 촘촘한 대시보드형" },
-      { value: "playful", label: "가볍고 친근한" },
+      { value: "minimal", label: "여백이 넉넉하고 단순한 화면" },
+      { value: "dense", label: "정보가 촘촘하게 모인 화면" },
     ],
   },
   {
-    id: "wireframes-key-screen",
-    stage: "wireframes",
-    importance: "P1",
-    prompt: "가장 중요한 화면은 무엇이고, 그 화면에 꼭 있어야 할 요소는 무엇인가요?",
-  },
-  {
     id: "wireframes-reference",
+    short: "참고 화면",
     stage: "wireframes",
     importance: "P2",
     kind: "list",
-    prompt: "참고하고 싶은 화면 레이아웃(앱, 사이트, 이미지)이 있나요?",
+    prompt: "화면 배치를 참고하고 싶은 앱이나 웹사이트, 이미지가 있나요?",
   },
 
-  // 9. 상호작용 정의
+  // 9. 화면 동작
   {
     id: "interactions-states",
+    short: "화면 상태",
     stage: "interactions",
     importance: "P0",
     kind: "multi",
-    prompt: "화면마다 별도로 설계해야 할 상태를 골라주세요.",
-    hint: "고르지 않은 상태는 AI 에이전트가 임의로 채우게 됩니다.",
+    prompt: "화면을 설계할 때 따로 고려해야 할 상태를 골라주세요.",
+    hint: "고르지 않은 상태는 AI가 알아서 정해요.",
     choices: [
       { value: "loading", label: "로딩 중" },
       { value: "empty", label: "비어 있음" },
@@ -236,72 +254,91 @@ const raw: z.input<typeof QuestionSchema>[] = [
   },
   {
     id: "interactions-key",
+    short: "화면 동작",
     stage: "interactions",
     importance: "P1",
     kind: "list",
-    prompt: "핵심 상호작용을 '무엇을 하면 → 무슨 일이 생긴다' 형태로 적어주세요.",
-    examples: ["Enter를 누르면 → 할 일이 추가되고 입력창이 비워진다"],
+    prompt: "사용자의 어떤 행동에 어떤 결과가 생기는지 적어주세요.",
+    examples: ["예약 버튼을 누르면 → 예약 확인 화면이 열린다"],
   },
   {
     id: "interactions-feedback",
+    short: "결과 알림",
     stage: "interactions",
     importance: "P2",
-    prompt: "작업 성공/실패를 사용자에게 어떻게 알려주나요?",
-    examples: ["토스트 메시지", "인라인 문구"],
+    prompt: "작업이 성공하거나 실패했을 때 사용자에게 어떻게 알려주나요?",
+    examples: ["화면 아래에 잠깐 뜨는 알림","입력칸 아래에 표시되는 문구"],
   },
   {
     id: "interactions-shortcuts",
+    short: "단축키·손동작",
     stage: "interactions",
     importance: "P2",
     kind: "list",
-    prompt: "키보드 단축키나 제스처가 필요한가요?",
+    prompt: "필요한 키보드 단축키나 손가락 동작은 무엇인가요?",
   },
 
   // 10. 데이터/API
   {
     id: "data-entities",
+    short: "핵심 데이터",
     stage: "data",
     importance: "P0",
     kind: "list",
-    prompt: "앱이 다루는 핵심 데이터(엔티티)는 무엇이고, 각각 어떤 정보를 가지나요?",
-    examples: ["할 일: 제목, 완료 여부, 마감일"],
+    prompt: "제품에서 다루는 핵심 데이터는 무엇인가요?",
+    examples: ["예약","손님","가게"],
+  },
+  {
+    id: "data-fields",
+    short: "데이터 항목",
+    stage: "data",
+    importance: "P1",
+    kind: "list",
+    prompt: "각 데이터에는 어떤 정보를 담나요?",
+    hint: "데이터마다 한 줄로 적어 주세요.",
+    examples: ["예약: 손님 이름, 날짜, 인원"],
+    when: { questionId: "data-entities" },
   },
   {
     id: "data-storage",
+    short: "저장 위치",
     stage: "data",
     importance: "P0",
     kind: "choice",
     prompt: "데이터는 어디에 저장하나요?",
     choices: [
-      { value: "memory", label: "저장 안 함" },
-      { value: "local-file", label: "로컬 파일/브라우저 저장소" },
-      { value: "sqlite", label: "로컬 DB(SQLite)" },
-      { value: "cloud-db", label: "클라우드 DB" },
+      { value: "memory", label: "실행 중에만 보관" },
+      { value: "local-file", label: "기기의 파일 또는 브라우저에 저장" },
+      { value: "sqlite", label: "기기에 데이터베이스로 저장(SQLite)" },
+      { value: "cloud-db", label: "인터넷상의 데이터베이스에 저장" },
     ],
   },
   {
     id: "data-sync",
+    short: "기기 동기화",
     stage: "data",
     importance: "P2",
     kind: "boolean",
-    prompt: "여러 기기 간 동기화가 필요한가요?",
+    prompt: "여러 기기에서 같은 데이터를 볼 수 있도록 동기화해야 하나요?",
     when: { questionId: "data-storage", equals: "cloud-db" },
   },
   {
     id: "data-external",
+    short: "외부 서비스 연결",
     stage: "data",
     importance: "P1",
     kind: "list",
-    prompt: "연동할 외부 서비스나 API가 있나요?",
+    prompt: "연결해서 사용할 외부 서비스나 데이터 제공 기능(API)은 무엇인가요?",
   },
 
-  // 11. 기술 스택/아키텍처
+  // 11. 기술 선택
   {
     id: "stack-platform",
+    short: "실행 환경",
     stage: "stack",
     importance: "P0",
     kind: "multi",
-    prompt: "어떤 환경에서 실행되나요?",
+    prompt: "이 제품은 어떤 환경에서 실행되나요?",
     choices: [
       { value: "web", label: "웹" },
       { value: "windows", label: "Windows 데스크톱" },
@@ -311,34 +348,48 @@ const raw: z.input<typeof QuestionSchema>[] = [
   },
   {
     id: "stack-language",
+    short: "개발 언어·도구",
     stage: "stack",
     importance: "P0",
-    prompt: "주 사용 언어와 프레임워크는 무엇인가요?",
-    examples: ["TypeScript + React + Vite"],
+    prompt: "주로 사용할 프로그래밍 언어와 개발 틀(프레임워크)은 무엇인가요?",
+    examples: ["TypeScript와 React, Vite"],
   },
   {
     id: "stack-conventions",
+    short: "코딩 규칙",
     stage: "stack",
     importance: "P1",
-    prompt: "AI 에이전트가 지켜야 할 코딩 규칙이나 금지 사항이 있나요?",
-    examples: ["any 사용 금지", "새 라이브러리 추가 전 확인"],
+    prompt: "AI가 코드를 만들 때 지켜야 할 규칙이나 금지 사항은 무엇인가요?",
+    examples: ["any 사용 금지","새 라이브러리를 추가하기 전에 확인"],
   },
   {
     id: "stack-constraints",
+    short: "제약 조건",
     stage: "stack",
     importance: "P1",
     prompt: "라이선스, 성능, 보안 등 지켜야 할 제약이 있나요?",
   },
   {
+    id: "security-personal-data",
+    short: "개인정보 보호",
+    stage: "stack",
+    importance: "P1",
+    prompt: "개인정보(이름, 연락처, 위치 등)를 다룬다면 어떻게 보호해야 하나요?",
+    hint: "다루지 않는다면 '없음'이라고 적어 주세요.",
+    examples: ["비밀번호는 암호화해서 저장한다","개인정보는 기기 밖으로 보내지 않는다"],
+  },
+  {
     id: "stack-testing",
+    short: "테스트 방식",
     stage: "stack",
     importance: "P2",
-    prompt: "테스트는 어떤 방식으로 하나요?",
+    prompt: "제품이 제대로 동작하는지 어떤 방식으로 확인하나요?",
   },
 
   // 12. 디자인 시스템
   {
     id: "design-theme",
+    short: "테마",
     stage: "design_system",
     importance: "P1",
     kind: "choice",
@@ -351,69 +402,99 @@ const raw: z.input<typeof QuestionSchema>[] = [
   },
   {
     id: "design-tone",
+    short: "디자인 분위기",
     stage: "design_system",
     importance: "P1",
-    prompt: "전체적인 디자인 분위기를 설명해주세요.",
-    examples: ["차분하고 정돈된 느낌, 포인트 컬러 하나"],
+    prompt: "전체적인 디자인은 어떤 분위기인가요?",
+    examples: ["차분하고 정돈된 느낌에 강조 색상 하나"],
   },
   {
     id: "design-colors",
+    short: "브랜드 색상",
     stage: "design_system",
     importance: "P2",
     kind: "list",
-    prompt: "정해진 브랜드 색상이 있나요?",
+    prompt: "정해진 브랜드 색상은 무엇인가요?",
   },
   {
     id: "design-font",
+    short: "글꼴",
     stage: "design_system",
     importance: "P2",
-    prompt: "사용할 글꼴이 있나요?",
+    prompt: "사용할 글꼴은 무엇인가요?",
   },
 
-  // 13. 로드맵/태스크 분해
+  // 13. 로드맵/작업 분해
   {
     id: "tasks-order",
+    short: "작업 순서",
     stage: "tasks",
     importance: "P0",
     kind: "list",
-    prompt: "어떤 순서로 만들면 좋을까요? 먼저 동작해야 하는 것부터 적어주세요.",
+    prompt: "먼저 동작해야 하는 것부터 어떤 순서로 만들면 좋을까요?",
   },
   {
     id: "tasks-first",
+    short: "첫 목표",
     stage: "tasks",
     importance: "P1",
-    prompt: "첫 번째 마일스톤은 무엇이고, 어떤 상태면 끝난 건가요?",
+    prompt: "첫 번째로 완성할 목표는 무엇인가요?",
+  },
+  {
+    id: "tasks-first-done",
+    short: "첫 목표 완료 기준",
+    stage: "tasks",
+    importance: "P1",
+    prompt: "그 첫 번째 목표가 끝났다고 볼 기준은 무엇인가요?",
+    when: { questionId: "tasks-first" },
   },
   {
     id: "tasks-size",
+    short: "작업 크기",
     stage: "tasks",
     importance: "P2",
     kind: "choice",
-    prompt: "AI에게 한 번에 맡길 작업 크기는 어느 정도가 좋나요?",
+    prompt: "AI에게 한 번에 어느 정도의 작업을 맡기고 싶나요?",
     choices: [
-      { value: "small", label: "작게 (파일 1~2개)" },
-      { value: "medium", label: "중간 (기능 하나)" },
+      { value: "small", label: "작게: 파일 1~2개 정도" },
+      { value: "medium", label: "중간: 기능 하나 정도" },
     ],
   },
 
-  // 14. 리스크/가정
+  // 14. 위험과 가정
   {
     id: "risks-assumptions",
+    short: "미확인 가정",
     stage: "risks",
     importance: "P1",
     kind: "list",
-    prompt: "맞다고 가정하고 있지만 확인하지 못한 것은 무엇인가요?",
+    prompt: "맞을 것이라고 생각하지만 아직 확인하지 못한 것은 무엇인가요?",
   },
   {
     id: "risks-main",
+    short: "주요 위험",
     stage: "risks",
     importance: "P2",
     kind: "list",
-    prompt: "가장 걱정되는 위험(기술, 일정, 데이터 등)은 무엇인가요?",
+    prompt: "프로젝트에서 가장 걱정되는 위험은 무엇인가요?",
   },
 ];
 
 export const QUESTION_BANK: Question[] = z.array(QuestionSchema).parse(raw);
+
+/** Short name for narrow lists; falls back to a trimmed prompt. */
+export function questionLabel(q: Question, max = 14): string {
+  if (q.short) return q.short;
+  return q.prompt.length > max ? `${q.prompt.slice(0, max)}…` : q.prompt;
+}
+
+/** One-line preview of an answer, cut to `max` characters. */
+export function answerPreview(value: AnswerValue | undefined, max = 20): string {
+  if (value === undefined) return "";
+  const text = typeof value === "boolean" ? (value ? "예" : "아니오") : Array.isArray(value) ? value.join(", ") : value;
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > max ? `${flat.slice(0, max)}…` : flat;
+}
 
 export function getQuestion(id: string): Question | undefined {
   return QUESTION_BANK.find((q) => q.id === id);

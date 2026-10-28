@@ -1,154 +1,28 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Bot, Check, X } from "lucide-react";
 import {
-  QUESTION_BANK,
+  EDGE_LABELS,
   STAGES,
   STATUSES,
   getQuestion,
   removeEdge,
   reviewNode,
+  setFolder,
   setStatus,
   updateNode,
-  type Completeness,
   type EdgeKind,
   type ProjectSpec,
   type Status,
 } from "@scenario/core";
 import { FIELDS, type FieldSpec } from "./fields";
 import { STATUS_LABEL, StatusDot, TYPE_LABEL } from "./Nodes";
-import { valueText, type QuestionTab } from "./QuestionPanel";
+import { valueText } from "./format";
 
-export const EDGE_LABEL: Record<EdgeKind, string> = {
-  contains: "포함",
-  implements: "구현",
-  navigates: "화면 이동",
-  depends_on: "선행 필요",
-  uses_data: "데이터 사용",
-  blocks: "막음",
-  relates: "관련",
-};
+export const EDGE_LABEL: Record<EdgeKind, string> = EDGE_LABELS;
 
 const stageLabel = (id: string) => STAGES.find((s) => s.id === id)?.label ?? id;
 
 type Apply = (fn: (s: ProjectSpec) => ProjectSpec) => boolean;
-
-export function Sidebar(props: {
-  spec: ProjectSpec;
-  rollup: Record<string, Status>;
-  comp: Completeness;
-  openQuestions(tab: QuestionTab): void;
-}) {
-  const { spec, rollup, comp } = props;
-  const counts: Record<Status, number> = { planned: 0, in_progress: 0, blocked: 0, done: 0 };
-  for (const n of spec.nodes) counts[rollup[n.id] ?? "planned"]++;
-
-  const tasks = spec.nodes.filter((n) => n.type === "task");
-  const tasksDone = tasks.filter((n) => rollup[n.id] === "done").length;
-  const skipped = spec.answers.filter((a) => a.state === "skipped");
-  const review = spec.answers.filter((a) => a.state === "ai_decided" && !a.provenance.reviewed);
-  const reviewNodes = spec.nodes.filter((n) => n.provenance?.source === "ai" && !n.provenance.reviewed);
-
-  return (
-    <aside className="sidebar">
-      <section>
-        <h2>진행 상황</h2>
-        <ul className="legend">
-          {STATUSES.map((s) => (
-            <li key={s}>
-              <StatusDot status={s} /> {STATUS_LABEL[s]} <b>{counts[s]}</b>
-            </li>
-          ))}
-        </ul>
-        {tasks.length > 0 && (
-          <div className="meter" title={`작업 ${tasksDone}/${tasks.length} 완료`}>
-            <div className="meter-bar" style={{ width: `${(tasksDone / tasks.length) * 100}%` }} />
-            <span>작업 {tasksDone}/{tasks.length} 완료</span>
-          </div>
-        )}
-      </section>
-
-      <section>
-        <h2>기획 완성도</h2>
-        {(["P0", "P1", "P2"] as const).map((p) => {
-          const t = comp.byImportance[p];
-          const label = p === "P0" ? "필수" : p === "P1" ? "권장" : "선택";
-          return (
-            <div className="meter" key={p} title={`${t.resolved}/${t.total} 완료 · 건너뜀 ${t.skipped} · 미답변 ${t.open}`}>
-              <div className={`meter-bar ${p}`} style={{ width: t.total ? `${(t.resolved / t.total) * 100}%` : "0%" }} />
-              <span>{label} {t.resolved}/{t.total}</span>
-            </div>
-          );
-        })}
-      </section>
-
-      <section>
-        <h2>확인이 필요한 것</h2>
-
-        <h3>
-          필수 질문 미답변 <b>{comp.missingP0.length}</b>
-          {comp.missingP0.length > 0 && (
-            <button className="linkish" onClick={() => props.openQuestions("next")}>답하기</button>
-          )}
-        </h3>
-        {comp.missingP0.length === 0 ? (
-          <p className="muted">없음</p>
-        ) : (
-          <ul className="plain">
-            {comp.missingP0.map((id) => (
-              <li key={id}>
-                <span className="muted">{stageLabel(getQuestion(id)?.stage ?? "")}</span> {getQuestion(id)?.prompt ?? id}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <h3>
-          AI 판단 · 검토 대기 <b>{review.length + reviewNodes.length}</b>
-          {review.length > 0 && (
-            <button className="linkish" onClick={() => props.openQuestions("review")}>검토하기</button>
-          )}
-        </h3>
-        {review.length + reviewNodes.length === 0 ? (
-          <p className="muted">없음</p>
-        ) : (
-          <ul className="plain">
-            {review.map((a) => (
-              <li key={a.questionId}>
-                <span className="ai-badge unreviewed"><Bot size={11} /> AI</span> {getQuestion(a.questionId)?.prompt ?? a.questionId}
-                <div className="answer">{valueText(a.value)}</div>
-                <div className="muted">근거: {a.provenance.rationale}</div>
-              </li>
-            ))}
-            {reviewNodes.map((n) => (
-              <li key={n.id}>
-                <span className="ai-badge unreviewed"><Bot size={11} /> AI</span> {TYPE_LABEL[n.type]} · {n.title}
-                <div className="muted">근거: {n.provenance?.rationale}</div>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <h3>
-          건너뜀 · 에이전트가 판단할 것 <b>{skipped.length}</b>
-          {skipped.length > 0 && (
-            <button className="linkish" onClick={() => props.openQuestions("skipped")}>보기</button>
-          )}
-        </h3>
-        {skipped.length === 0 ? (
-          <p className="muted">없음</p>
-        ) : (
-          <ul className="plain">
-            {skipped.map((a) => (
-              <li key={a.questionId}>{getQuestion(a.questionId)?.prompt ?? a.questionId}</li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <p className="muted foot">질문 은행 {QUESTION_BANK.length}개 · 노드 {spec.nodes.length}개 · 연결 {spec.edges.length}개</p>
-    </aside>
-  );
-}
 
 /** One editable field. Remounted (via key) whenever the stored value changes, so it never shows stale text. */
 function FieldEditor(props: { field: FieldSpec; value: unknown; onCommit: (v: unknown) => void }) {
@@ -211,20 +85,9 @@ export function Detail(props: {
   apply: Apply;
   onSelect(id: string): void;
   onClose(): void;
-  /** Bumps when a node was just created, so the title gets focus. */
-  focusTitleToken: number;
 }) {
   const { spec, rollup, id, apply, onSelect, onClose } = props;
   const node = spec.nodes.find((n) => n.id === id);
-  const titleRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (props.focusTitleToken > 0) {
-      titleRef.current?.focus();
-      titleRef.current?.select();
-    }
-  }, [props.focusTitleToken, id]);
-
   if (!node) return null;
 
   const title = (i: string) => spec.nodes.find((n) => n.id === i)?.title ?? i;
@@ -232,6 +95,7 @@ export function Detail(props: {
   const inc = spec.edges.filter((e) => e.to === id);
   const effective = rollup[id] ?? node.status;
   const answers = spec.answers.filter((a) => a.nodeIds.includes(id));
+  const members = spec.nodes.filter((n) => n.folderId === id);
   const patch = (p: Record<string, unknown>) => apply((s) => updateNode(s, id, p));
 
   return (
@@ -240,7 +104,6 @@ export function Detail(props: {
       <div className="muted">{TYPE_LABEL[node.type] ?? node.type} · <code>{node.id}</code></div>
       <input
         key={`${node.id}:${node.title}`}
-        ref={titleRef}
         className="title-input"
         defaultValue={node.title}
         aria-label="이름"
@@ -298,6 +161,45 @@ export function Detail(props: {
           />
         );
       })}
+
+      {node.type === "folder" && (
+        <>
+          <h3>담긴 노드 {members.length}</h3>
+          {members.length === 0 ? (
+            <p className="muted">노드를 끌어다 이 폴더 위에 놓으면 담깁니다.</p>
+          ) : (
+            <ul className="plain links">
+              {members.map((m) => (
+                <li key={m.id}>
+                  <a href="#" onClick={(ev) => { ev.preventDefault(); onSelect(m.id); }}>{m.title}</a>
+                  <span className="muted"> {TYPE_LABEL[m.type]}</span>
+                  <button
+                    className="icon-x"
+                    title="폴더에서 빼기"
+                    aria-label="폴더에서 빼기"
+                    onClick={() => apply((s) => setFolder(s, m.id, node.folderId))}
+                  >
+                    <X size={12} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      {node.folderId && (
+        <div className="muted">
+          폴더: <a href="#" onClick={(ev) => { ev.preventDefault(); onSelect(node.folderId!); }}>{title(node.folderId)}</a>
+          <button
+            className="icon-x"
+            title="폴더에서 빼기"
+            aria-label="폴더에서 빼기"
+            onClick={() => apply((s) => setFolder(s, id, s.nodes.find((f) => f.id === node.folderId)?.folderId))}
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
 
       {node.external && Object.keys(node.external).length > 0 && (
         <div className="muted">연동: {JSON.stringify(node.external)}</div>

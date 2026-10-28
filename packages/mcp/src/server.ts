@@ -70,11 +70,11 @@ function describeQuestion(q: Question, spec: ProjectSpec) {
 /** Answers that exist but have not been turned into nodes yet. */
 const MODELING: { question: string; nodeType: string; hint: string }[] = [
   { question: "ia-screens", nodeType: "screen", hint: "create a screen node for each listed screen" },
-  { question: "data-entities", nodeType: "entity", hint: "create an entity node (with fields) for each data type" },
+  { question: "data-entities", nodeType: "entity", hint: "create an entity node for each data type; fill its fields from the data-fields answer" },
   { question: "tasks-order", nodeType: "task", hint: "create task nodes with order and doneWhen" },
   { question: "scope-mvp", nodeType: "feature", hint: "create feature nodes with inMvp=true" },
   { question: "users-who", nodeType: "persona", hint: "create a persona node per user group" },
-  { question: "stories-core", nodeType: "story", hint: "create story nodes with acceptance criteria" },
+  { question: "stories-core", nodeType: "story", hint: "create story nodes (shown to the user as 요구사항) with acceptance criteria" },
   { question: "risks-main", nodeType: "risk", hint: "create risk nodes" },
 ];
 
@@ -165,6 +165,7 @@ export function createServer(store: Store): McpServer {
           title: n.title,
           status: rollup[n.id],
           aiDecided: n.provenance?.source === "ai",
+          folderId: n.folderId,
         })),
         edges: spec.edges,
       };
@@ -267,7 +268,7 @@ export function createServer(store: Store): McpServer {
 
   tool(
     "add_node",
-    `Add a node. type is one of vision, persona, feature, story, screen, interaction, flow, entity, decision, task, risk. id is a lowercase slug like "feat-login". Type-specific fields go in "fields" (e.g. task: {order, doneWhen[]}; screen: {route, states[{name, description}]}; entity: {fields[{name,type}]}). Set parent_id to place it under another node.`,
+    `Add a node. type is one of vision, persona, feature, story, screen, interaction, flow, entity, decision, task, risk, folder. A folder only groups nodes on the diagram: create it first, then give members {"folderId": "<folder id>"} in "fields". id is a lowercase slug like "feat-login". Type-specific fields go in "fields" (e.g. task: {order, doneWhen[]}; screen: {route, states[{name, description}]}; entity: {fields[{name,type}]}). Set parent_id to place it under another node.`,
     {
       type: z.string(),
       id: z.string(),

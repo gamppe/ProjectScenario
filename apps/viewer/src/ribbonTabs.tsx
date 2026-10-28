@@ -1,4 +1,14 @@
+import type { ReactNode } from "react";
 import {
+  AlignCenterHorizontal,
+  AlignCenterVertical,
+  AlignEndHorizontal,
+  AlignEndVertical,
+  AlignHorizontalSpaceAround,
+  AlignHorizontalSpaceBetween,
+  AlignStartHorizontal,
+  AlignStartVertical,
+  AlignVerticalSpaceBetween,
   Bot,
   CheckCheck,
   CircleDot,
@@ -9,7 +19,9 @@ import {
   FilePlus,
   FlaskConical,
   FolderOpen,
+  FolderUp,
   Frame,
+  House,
   LayoutGrid,
   Languages,
   Map as MapIcon,
@@ -20,36 +32,42 @@ import {
   PanelLeft,
   Pencil,
   Plug,
-  Redo2,
   Save,
   SaveAll,
   SkipForward,
   Sun,
   SunMoon,
-  Trash2,
-  Undo2,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { EDGE_KINDS, STATUSES, type EdgeKind, type NodeType, type Status } from "@scenario/core";
-import { EDGE_STROKE, NODE_ICON, NODE_TYPES_ORDER } from "./icons";
+import { EDGE_KINDS, STATUSES, alignMinimum, type AlignMode, type EdgeKind, type NodeType, type Status } from "@scenario/core";
+import { EdgeSwatch } from "./EdgeSwatch";
+import { EDGE_HINT, NODE_HINT, NODE_ICON, NODE_TYPES_ORDER } from "./icons";
 import { StatusDot, STATUS_LABEL, TYPE_LABEL } from "./Nodes";
 import { EDGE_LABEL } from "./Panels";
 import type { QuestionTab } from "./QuestionPanel";
 import type { RibbonTab } from "./Ribbon";
+
+const FolderIcon = NODE_ICON.folder;
 
 export type Theme = "auto" | "light" | "dark";
 
 export interface RibbonCtx {
   hasProject: boolean;
   dirty: boolean;
-  canUndo: boolean;
-  canRedo: boolean;
   outputLanguage: "en" | "ko";
-  /** a node or an edge is selected */
-  hasSelection: boolean;
-  selectedNode: { id: string; ai: boolean; unreviewed: boolean } | null;
+  /** the selected nodes: one (or none) by clicking, several by dragging a box with the right mouse button */
+  selection: {
+    count: number;
+    /** set only when exactly one node is selected */
+    single: { id: string } | null;
+    anyUnreviewed: boolean;
+  };
   linkMode: EdgeKind | null;
+  /** node type armed for click-to-place, if any */
+  placing: NodeType | null;
+  /** the folder whose diagram is open (null = main) */
+  view: string | null;
   badges: { openRequired: number; skipped: number; review: number };
   theme: Theme;
   showSidebar: boolean;
@@ -65,14 +83,13 @@ export interface RibbonCtx {
     loadExample(): void;
     renameProject(): void;
     toggleLanguage(): void;
-    undo(): void;
-    redo(): void;
     setStatus(s: Status): void;
-    renameNode(): void;
-    remove(): void;
+    align(mode: AlignMode): void;
     reviewSelected(): void;
     approveAllAi(): void;
-    addNode(t: NodeType): void;
+    startPlacing(t: NodeType): void;
+    folderUp(): void;
+    folderHome(): void;
     startLink(k: EdgeKind): void;
     openQuestions(t: QuestionTab): void;
     setTheme(t: Theme): void;
@@ -97,8 +114,17 @@ const SOON = "준비 중인 기능입니다.";
 
 export function buildTabs(c: RibbonCtx): RibbonTab[] {
   const noProject = !c.hasProject;
-  const noNode = !c.selectedNode;
+  const none = c.selection.count === 0;
+  const noSingle = !c.selection.single;
   const a = c.a;
+
+  const alignItem = (id: string, label: string, icon: ReactNode, mode: AlignMode) => ({
+    id,
+    label,
+    icon,
+    onClick: () => a.align(mode),
+    disabled: c.selection.count < alignMinimum(mode),
+  });
 
   return [
     {
@@ -107,7 +133,6 @@ export function buildTabs(c: RibbonCtx): RibbonTab[] {
       groups: [
         {
           label: "프로젝트",
-          rows: 2,
           items: [
             { id: "new", label: "새로 만들기", icon: <FilePlus size={28} />, onClick: a.newProject },
             { id: "open", label: "열기", icon: <FolderOpen size={28} />, onClick: a.open },
@@ -146,30 +171,15 @@ export function buildTabs(c: RibbonCtx): RibbonTab[] {
       label: "홈",
       groups: [
         {
-          label: "실행 취소",
-          rows: 2,
-          items: [
-            { id: "undo", label: "실행 취소", icon: <Undo2 size={16} />, size: "small", onClick: a.undo, disabled: !c.canUndo, title: "실행 취소 (Ctrl+Z)" },
-            { id: "redo", label: "다시 실행", icon: <Redo2 size={16} />, size: "small", onClick: a.redo, disabled: !c.canRedo, title: "다시 실행 (Ctrl+Y)" },
-          ],
-        },
-        {
           label: "선택한 노드의 상태",
           items: STATUSES.map((s) => ({
             id: `st-${s}`,
             label: STATUS_LABEL[s],
-            icon: <StatusDot status={s} size={22} />,
+            icon: <StatusDot status={s} size={16} />,
             onClick: () => a.setStatus(s),
-            disabled: noNode,
+            disabled: none,
             title: `${STATUS_LABEL[s]}(으)로 표시`,
           })),
-        },
-        {
-          label: "편집",
-          items: [
-            { id: "rename-node", label: "이름 바꾸기", icon: <Pencil size={28} />, onClick: a.renameNode, disabled: noNode },
-            { id: "delete", label: "삭제", icon: <Trash2 size={28} />, onClick: a.remove, disabled: !c.hasSelection, title: "선택한 노드/연결 삭제 (Delete) · Ctrl+Z로 되돌릴 수 있습니다" },
-          ],
         },
         {
           label: "AI 검토",
@@ -179,7 +189,7 @@ export function buildTabs(c: RibbonCtx): RibbonTab[] {
               label: "AI 항목 승인",
               icon: <CheckCheck size={28} />,
               onClick: a.reviewSelected,
-              disabled: !c.selectedNode?.unreviewed,
+              disabled: !c.selection.anyUnreviewed,
               title: "AI가 만든 노드를 그대로 받아들입니다",
             },
           ],
@@ -191,8 +201,21 @@ export function buildTabs(c: RibbonCtx): RibbonTab[] {
       label: "삽입",
       groups: [
         {
+          label: "묶기",
+          items: [
+            {
+              id: "add-folder",
+              label: TYPE_LABEL.folder ?? "폴더",
+              icon: <FolderIcon size={22} />,
+              onClick: () => a.startPlacing("folder"),
+              disabled: noProject,
+              active: c.placing === "folder",
+              title: `${TYPE_LABEL.folder}: ${NODE_HINT.folder}`,
+            },
+          ],
+        },
+        {
           label: "노드 추가",
-          rows: 2,
           items: NODE_TYPES_ORDER.map((t) => {
             const Icon = NODE_ICON[t];
             return {
@@ -200,24 +223,24 @@ export function buildTabs(c: RibbonCtx): RibbonTab[] {
               label: TYPE_LABEL[t] ?? t,
               icon: <Icon size={22} />,
               size: "medium" as const,
-              onClick: () => a.addNode(t),
+              onClick: () => a.startPlacing(t),
               disabled: noProject,
-              title: `${TYPE_LABEL[t]} 추가 · 노드를 선택해 두었으면 그 아래에, 아니면 최상위에 만들어집니다`,
+              active: c.placing === t,
+              title: `${TYPE_LABEL[t]}: ${NODE_HINT[t]}`,
             };
           }),
         },
         {
           label: "연결 만들기",
-          rows: 4,
           items: EDGE_KINDS.map((k) => ({
             id: `link-${k}`,
             label: EDGE_LABEL[k],
-            icon: <span className="edge-swatch" style={{ background: EDGE_STROKE[k] }} />,
+            icon: <EdgeSwatch kind={k} />,
             size: "small" as const,
             onClick: () => a.startLink(k),
-            disabled: noNode,
+            disabled: noSingle,
             active: c.linkMode === k,
-            title: `${EDGE_LABEL[k]} 연결: 먼저 노드를 선택하고, 이 버튼을 누른 뒤 대상 노드를 클릭하세요`,
+            title: `${EDGE_LABEL[k]}: ${EDGE_HINT[k]}`,
           })),
         },
       ],
@@ -269,8 +292,8 @@ export function buildTabs(c: RibbonCtx): RibbonTab[] {
           items: (
             [
               ["auto", "자동", <SunMoon size={28} key="a" />],
-              ["light", "밝게", <Sun size={28} key="l" />],
-              ["dark", "어둡게", <Moon size={28} key="d" />],
+              ["light", "라이트 테마", <Sun size={28} key="l" />],
+              ["dark", "다크 테마", <Moon size={28} key="d" />],
             ] as const
           ).map(([id, label, icon]) => ({
             id: `theme-${id}`,
@@ -279,19 +302,6 @@ export function buildTabs(c: RibbonCtx): RibbonTab[] {
             active: c.theme === id,
             onClick: () => a.setTheme(id),
           })),
-        },
-        {
-          label: "배치",
-          items: [
-            {
-              id: "tidy",
-              label: "자동 정렬",
-              icon: <LayoutGrid size={28} />,
-              onClick: a.tidy,
-              disabled: noProject,
-              title: "직접 옮긴 노드 위치를 모두 지우고 트리 모양으로 다시 배치합니다",
-            },
-          ],
         },
         {
           label: "디자인 도구 연동",
@@ -316,6 +326,13 @@ export function buildTabs(c: RibbonCtx): RibbonTab[] {
           ],
         },
         {
+          label: "폴더",
+          items: [
+            { id: "fup", label: "상위 폴더", icon: <FolderUp size={16} />, size: "small", onClick: a.folderUp, disabled: !c.view, title: "한 단계 위로" },
+            { id: "fhome", label: "메인으로", icon: <House size={16} />, size: "small", onClick: a.folderHome, disabled: !c.view, title: "메인 다이어그램으로" },
+          ],
+        },
+        {
           label: "표시",
           items: [
             { id: "side", label: "왼쪽 패널", icon: <PanelLeft size={16} />, size: "small", active: c.showSidebar, onClick: a.toggleSidebar },
@@ -325,11 +342,10 @@ export function buildTabs(c: RibbonCtx): RibbonTab[] {
         },
         {
           label: "연결선 표시",
-          rows: 4,
           items: EDGE_KINDS.map((k) => ({
             id: `show-${k}`,
             label: EDGE_LABEL[k],
-            icon: <span className="edge-swatch" style={{ background: EDGE_STROKE[k] }} />,
+            icon: <EdgeSwatch kind={k} />,
             size: "small" as const,
             active: !c.hiddenKinds.has(k),
             onClick: () => a.toggleKind(k),
@@ -338,9 +354,48 @@ export function buildTabs(c: RibbonCtx): RibbonTab[] {
       ],
     },
     {
-      id: "export",
-      label: "내보내기",
+      id: "tools",
+      label: "도구",
       groups: [
+        {
+          label: "배치",
+          items: [
+            {
+              id: "align",
+              label: "정렬",
+              icon: <AlignHorizontalSpaceAround size={28} />,
+              title: "선택한 노드들을 정렬합니다 (오른쪽 마우스 버튼으로 드래그해서 여러 개를 선택)",
+              menu: [
+                {
+                  label: "맞춤",
+                  items: [
+                    alignItem("al-left", "왼쪽 맞춤", <AlignStartVertical size={16} />, "left"),
+                    alignItem("al-center", "가운데 맞춤", <AlignCenterVertical size={16} />, "center"),
+                    alignItem("al-right", "오른쪽 맞춤", <AlignEndVertical size={16} />, "right"),
+                    alignItem("al-top", "위쪽 맞춤", <AlignStartHorizontal size={16} />, "top"),
+                    alignItem("al-middle", "중간 맞춤", <AlignCenterHorizontal size={16} />, "middle"),
+                    alignItem("al-bottom", "아래쪽 맞춤", <AlignEndHorizontal size={16} />, "bottom"),
+                  ],
+                },
+                {
+                  label: "간격",
+                  items: [
+                    alignItem("al-dist-h", "가로 간격을 동일하게", <AlignHorizontalSpaceBetween size={16} />, "distribute-h"),
+                    alignItem("al-dist-v", "세로 간격을 동일하게", <AlignVerticalSpaceBetween size={16} />, "distribute-v"),
+                  ],
+                },
+              ],
+            },
+            {
+              id: "tidy",
+              label: "자동 정렬",
+              icon: <LayoutGrid size={28} />,
+              onClick: a.tidy,
+              disabled: noProject,
+              title: "지금 보는 화면의 노드를 트리 모양으로 다시 배치합니다",
+            },
+          ],
+        },
         {
           label: "md 파일",
           items: [
@@ -351,7 +406,7 @@ export function buildTabs(c: RibbonCtx): RibbonTab[] {
         {
           label: "클립보드로 복사",
           items: [
-            { id: "mmd", label: "Mermaid 플로우", icon: <Copy size={16} />, size: "small", onClick: a.copyMermaid, disabled: noProject },
+            { id: "mmd", label: "Mermaid 흐름도", icon: <Copy size={16} />, size: "small", onClick: a.copyMermaid, disabled: noProject },
             { id: "json", label: "project.json", icon: <Copy size={16} />, size: "small", onClick: a.copyJson, disabled: noProject },
           ],
         },

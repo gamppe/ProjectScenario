@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ZodError } from "zod";
 import { createSpec, safeParseSpec, type ProjectSpec } from "@scenario/core";
-import example from "../../../examples/todo-app/project.json";
+// A private copy for "예시 보기". Do not import a file the user may be editing (e.g. examples/todo-app/project.json):
+// the dev server treats it as source code, so every autosave would hot-reload the diagram and reset the zoom.
+import example from "./sample-project.json";
 
 /** Minimal slice of the File System Access API (Chromium / Electron). */
 interface FileHandle {

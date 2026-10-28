@@ -7,16 +7,16 @@ export const STAGES = [
   { id: "users", label: "사용자 정의" },
   { id: "competition", label: "경쟁 조사" },
   { id: "scope", label: "범위 설정" },
-  { id: "stories", label: "사용자 스토리" },
+  { id: "stories", label: "요구사항" },
   { id: "ia", label: "정보 구조" },
-  { id: "flows", label: "사용자 플로우" },
-  { id: "wireframes", label: "와이어프레임" },
-  { id: "interactions", label: "상호작용 정의" },
+  { id: "flows", label: "사용 흐름" },
+  { id: "wireframes", label: "화면 구성" },
+  { id: "interactions", label: "화면 동작" },
   { id: "data", label: "데이터/API" },
-  { id: "stack", label: "기술 스택/아키텍처" },
+  { id: "stack", label: "기술 선택" },
   { id: "design_system", label: "디자인 시스템" },
-  { id: "tasks", label: "로드맵/태스크 분해" },
-  { id: "risks", label: "리스크/가정" },
+  { id: "tasks", label: "로드맵/작업 분해" },
+  { id: "risks", label: "위험과 가정" },
 ] as const;
 
 export const StageIdSchema = z.enum([
@@ -56,6 +56,8 @@ export const QuestionSchema = z.object({
   importance: ImportanceSchema,
   /** Korean prompt shown in the UI. */
   prompt: z.string().min(1),
+  /** Very short name (a few words) for narrow lists. Falls back to the prompt when missing. */
+  short: z.string().min(1).optional(),
   hint: z.string().optional(),
   examples: z.array(z.string()).default([]),
   kind: z.enum(["text", "choice", "multi", "boolean", "list"]).default("text"),

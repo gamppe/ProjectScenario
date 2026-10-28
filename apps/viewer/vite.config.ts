@@ -88,6 +88,8 @@ function projectFile(): Plugin {
 }
 
 export default defineConfig({
+  // relative asset paths, so the built site works under any URL (GitHub Pages serves it from /<repo>/)
+  base: "./",
   plugins: [react(), projectFile()],
   resolve: {
     alias: {

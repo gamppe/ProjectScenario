@@ -65,6 +65,26 @@ export const ProjectSpecSchema = ProjectSpecShape.superRefine((spec, ctx) => {
     ids.add(n.id);
   });
 
+  // folders: membership must point at an existing folder, never at the node itself, never in a loop
+  const byId = new Map(spec.nodes.map((n) => [n.id, n] as const));
+  spec.nodes.forEach((n, i) => {
+    if (!n.folderId) return;
+    const folder = byId.get(n.folderId);
+    if (!folder) fail(`node "${n.id}" is in unknown folder "${n.folderId}"`, ["nodes", i, "folderId"]);
+    else if (folder.type !== "folder") fail(`"${n.folderId}" is not a folder`, ["nodes", i, "folderId"]);
+    else if (n.id === n.folderId) fail(`folder "${n.id}" cannot contain itself`, ["nodes", i, "folderId"]);
+  });
+  spec.nodes.forEach((n, i) => {
+    const seen = new Set([n.id]);
+    for (let cur = n.folderId; cur; cur = byId.get(cur)?.folderId) {
+      if (seen.has(cur)) {
+        fail(`folders form a cycle through "${cur}"`, ["nodes", i, "folderId"]);
+        break;
+      }
+      seen.add(cur);
+    }
+  });
+
   const seenEdges = new Set<string>();
   const parentOf = new Map<string, string>();
   spec.edges.forEach((e, i) => {

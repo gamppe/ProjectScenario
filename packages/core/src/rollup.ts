@@ -17,14 +17,18 @@ import type { ProjectSpec } from "./spec.js";
 export function computeRollup(spec: ProjectSpec): Record<string, Status> {
   const own = new Map(spec.nodes.map((n) => [n.id, n.status] as const));
   const children = new Map<string, string[]>();
-  for (const e of spec.edges) {
-    if (e.kind === "contains") children.set(e.from, [...(children.get(e.from) ?? []), e.to]);
-  }
+  const add = (from: string, to: string) => children.set(from, [...(children.get(from) ?? []), to]);
+  for (const e of spec.edges) if (e.kind === "contains") add(e.from, e.to);
+  // A folder also summarizes the nodes kept in it (but members do not inherit from their folder).
+  for (const n of spec.nodes) if (n.folderId) add(n.folderId, n.id);
 
   const result: Record<string, Status> = {};
+  const visiting = new Set<string>();
   const resolve = (id: string): Status => {
     const cached = result[id];
     if (cached) return cached;
+    if (visiting.has(id)) return own.get(id) ?? "planned"; // defensive: validated specs have no cycles
+    visiting.add(id);
 
     const kids = children.get(id);
     const self = own.get(id) ?? "planned";
@@ -42,6 +46,7 @@ export function computeRollup(spec: ProjectSpec): Record<string, Status> {
       else if (inputs.some((s) => s === "in_progress" || s === "done")) status = "in_progress";
       else status = "planned";
     }
+    visiting.delete(id);
     result[id] = status;
     return status;
   };

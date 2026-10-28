@@ -82,7 +82,7 @@ export const FIELDS: Record<NodeType, FieldSpec[]> = {
           return description ? { name, description } : { name };
         }),
     },
-    { key: "wireframe", label: "와이어프레임 파일", kind: "text" },
+    { key: "wireframe", label: "화면 구성 파일", kind: "text" },
   ],
   interaction: [
     { key: "trigger", label: "무엇을 하면", kind: "text" },
@@ -112,6 +112,7 @@ export const FIELDS: Record<NodeType, FieldSpec[]> = {
     { key: "order", label: "순서", kind: "number" },
     { key: "doneWhen", label: "완료 조건 (한 줄에 하나)", kind: "lines" },
   ],
+  folder: [],
   risk: [
     { key: "likelihood", label: "가능성", kind: "select", options: LEVEL },
     { key: "impact", label: "영향", kind: "select", options: LEVEL },

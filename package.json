@@ -10,7 +10,8 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r build && pnpm -r typecheck",
-    "scenario": "node packages/cli/dist/index.js"
+    "scenario": "node packages/cli/dist/index.js",
+    "export:questions": "node scripts/export-questions.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

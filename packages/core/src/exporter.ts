@@ -25,8 +25,14 @@ const STR = {
     featureCols: ["Feature", "Priority", "MVP", "Status"],
     yes: "yes",
     no: "no",
-    stories: "User stories",
+    stories: "Requirements",
     acceptance: "Acceptance criteria",
+    who: "As a",
+    want: "I want",
+    why: "so that",
+    given: "Given",
+    when: "when",
+    then: "then",
     risks: "Risks and assumptions",
     mitigation: "Mitigation",
     open: "Open items",
@@ -78,9 +84,15 @@ const STR = {
     featureCols: ["기능", "우선순위", "MVP", "상태"],
     yes: "예",
     no: "아니오",
-    stories: "사용자 스토리",
+    stories: "요구사항",
     acceptance: "완료 기준",
-    risks: "리스크와 가정",
+    who: "누가",
+    want: "원하는 일",
+    why: "이유",
+    given: "상황",
+    when: "행동",
+    then: "결과",
+    risks: "위험과 가정",
     mitigation: "대응",
     open: "남은 항목",
     openP0: "아직 답하지 않았거나 건너뛴 필수 질문",
@@ -88,12 +100,12 @@ const STR = {
     none: "없음.",
     screens: "화면",
     states: "상태",
-    interactions: "상호작용",
+    interactions: "화면 동작",
     navigation: "이동",
     data: "사용 데이터",
-    flows: "사용자 플로우",
+    flows: "사용 흐름",
     noFlows: "화면 간 이동이 아직 정의되지 않았습니다.",
-    mainFlow: "메인 플로우",
+    mainFlow: "주요 사용 흐름",
     tasks: "작업",
     taskHow: "작업은 순서대로 진행하세요. 변경은 작게 유지하세요. 상태는 `scenario status <id> <status>`로 갱신합니다.",
     doneWhen: "완료 조건",
@@ -101,7 +113,7 @@ const STR = {
     dependsOn: "선행 작업",
     project: "프로젝트",
     readFirst: "먼저 읽을 것",
-    stack: "기술 스택",
+    stack: "기술 선택",
     conventions: "규칙과 제약",
     scopeRules: "범위 규칙",
     doNotBuild: "만들지 말 것",
@@ -255,11 +267,27 @@ function renderPrd(c: Ctx): string {
     for (const st of stories) {
       out.push(`### ${st.title}${c.mark(st.provenance)}`);
       if (st.asA || st.iWant || st.soThat) {
-        out.push(`As a ${st.asA ?? "…"}, I want ${st.iWant ?? "…"}, so that ${st.soThat ?? "…"}.`);
+        if (c.lang === "en") {
+          out.push(`As a ${st.asA ?? "…"}, I want ${st.iWant ?? "…"}, so that ${st.soThat ?? "…"}.`);
+        } else {
+          out.push(
+            bullets([
+              `${s.who}: ${st.asA ?? "…"}`,
+              `${s.want}: ${st.iWant ?? "…"}`,
+              `${s.why}: ${st.soThat ?? "…"}`,
+            ]),
+          );
+        }
       }
       if (st.acceptance.length) {
         out.push("", `**${s.acceptance}**`);
-        for (const a of st.acceptance) out.push(`- Given ${a.given}, when ${a.when}, then ${a.then}`);
+        for (const a of st.acceptance) {
+          out.push(
+            c.lang === "en"
+              ? `- Given ${a.given}, when ${a.when}, then ${a.then}`
+              : `- ${s.given}: ${a.given} → ${s.when}: ${a.when} → ${s.then}: ${a.then}`,
+          );
+        }
       }
       out.push("");
     }
@@ -416,7 +444,7 @@ function renderAgents(c: Ctx): string {
 
   out.push(`## ${s.conventions}\n`);
   const conv: string[] = [];
-  for (const id of ["stack-conventions", "stack-constraints", "stack-testing"]) {
+  for (const id of ["stack-conventions", "stack-constraints", "security-personal-data", "stack-testing"]) {
     const a = c.answerLines(id);
     if (a) conv.push(...a.lines.map((l) => `${l}${a.mark}`));
   }

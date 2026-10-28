@@ -26,7 +26,8 @@ export function summarizeSpec(spec: ProjectSpec): Summary {
   const rollup = computeRollup(spec);
   const comp = computeCompleteness(QUESTION_BANK, spec);
   const nodes: Record<Status, number> = { planned: 0, in_progress: 0, blocked: 0, done: 0 };
-  for (const n of spec.nodes) nodes[rollup[n.id] ?? "planned"]++;
+  // folders only organize the diagram, so they are not counted as work items
+  for (const n of spec.nodes) if (n.type !== "folder") nodes[rollup[n.id] ?? "planned"]++;
   const tasks = spec.nodes.filter((n) => n.type === "task");
 
   return {

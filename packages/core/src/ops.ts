@@ -8,6 +8,7 @@ import {
   type AnswerValue,
   type Question,
 } from "./questions.js";
+import type { XY } from "./diagram.js";
 import { parseSpec, type ProjectSpec } from "./spec.js";
 
 /**
@@ -116,10 +117,73 @@ export function setPosition(spec: ProjectSpec, nodeId: string, pos: { x: number;
   });
 }
 
-/** Forget every saved position so the diagram re-lays itself out. */
-export function clearPositions(spec: ProjectSpec): ProjectSpec {
+/** Move several nodes at once (e.g. a folder together with everything inside it). */
+export function moveNodes(spec: ProjectSpec, moves: Record<string, { x: number; y: number }>): ProjectSpec {
   return change(spec, (d) => {
-    for (const n of d.nodes) delete n.position;
+    for (const [id, pos] of Object.entries(moves)) {
+      const n = d.nodes.find((x) => x.id === id);
+      if (!n) throw new Error(`unknown node "${id}"`);
+      n.position = { x: Math.round(pos.x), y: Math.round(pos.y) };
+    }
+  });
+}
+
+/**
+ * Put a node into a folder, or move it to the main level when `folderId` is undefined.
+ * A node's saved position belongs to the diagram it is shown in, so it is cleared when the
+ * node changes level and the new level lays it out again.
+ */
+export function setFolder(spec: ProjectSpec, nodeId: string, folderId: string | undefined): ProjectSpec {
+  return change(spec, (d) => {
+    const n = d.nodes.find((x) => x.id === nodeId);
+    if (!n) throw new Error(`unknown node "${nodeId}"`);
+    if (n.folderId !== folderId) delete n.position;
+    if (folderId === undefined) delete n.folderId;
+    else n.folderId = folderId; // existence, type and cycles are checked when the spec is re-validated
+  });
+}
+
+/** Save (or clear, with undefined) where one end of a line attaches to its node. */
+export function setEdgeAnchor(
+  spec: ProjectSpec,
+  edge: Pick<Edge, "from" | "to" | "kind">,
+  end: "from" | "to",
+  anchor: { side: "left" | "right" | "top" | "bottom"; offset: number } | undefined,
+): ProjectSpec {
+  return change(spec, (d) => {
+    const e = d.edges.find((x) => x.from === edge.from && x.to === edge.to && x.kind === edge.kind);
+    if (!e) throw new Error(`no ${edge.kind} edge ${edge.from} -> ${edge.to}`);
+    const field = end === "from" ? "fromAnchor" : "toAnchor";
+    if (anchor === undefined) delete e[field];
+    else e[field] = { side: anchor.side, offset: Math.round(anchor.offset * 1000) / 1000 };
+  });
+}
+
+/** Ids of everything kept in a folder, at any depth (nested folders included). */
+export function folderDescendants(spec: ProjectSpec, folderId: string): string[] {
+  const out: string[] = [];
+  const stack = [folderId];
+  while (stack.length) {
+    const cur = stack.pop()!;
+    for (const n of spec.nodes) {
+      if (n.folderId === cur && !out.includes(n.id)) {
+        out.push(n.id);
+        stack.push(n.id);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Forget saved positions so a diagram lays itself out again. With no `level`, every node;
+ * with a folder id (or null for the main diagram), only the nodes shown in that diagram.
+ */
+export function clearPositions(spec: ProjectSpec, level?: string | null): ProjectSpec {
+  return change(spec, (d) => {
+    for (const n of d.nodes) {
+      if (level === undefined || (n.folderId ?? null) === level) delete n.position;
+    }
   });
 }
 
@@ -164,6 +228,8 @@ export function removeNode(spec: ProjectSpec, nodeId: string): ProjectSpec {
     if (!d.nodes.some((n) => n.id === nodeId)) throw new Error(`unknown node "${nodeId}"`);
     d.nodes = d.nodes.filter((n) => n.id !== nodeId);
     d.edges = d.edges.filter((e) => e.from !== nodeId && e.to !== nodeId);
+    // deleting a folder keeps what was inside it
+    for (const n of d.nodes) if (n.folderId === nodeId) delete n.folderId;
     for (const a of d.answers) a.nodeIds = a.nodeIds.filter((id) => id !== nodeId);
   });
 }
@@ -323,4 +389,108 @@ export function createSpec(name: string, outputLanguage: "en" | "ko" = "en"): Pr
     edges: [],
     answers: [],
   });
+}
+
+/* ---------- copy and paste ---------- */
+
+/** What Ctrl+C keeps: the copied nodes (with everything inside copied folders) and the edges that touch them. */
+export interface Clipboard {
+  nodes: Node[];
+  edges: Edge[];
+  /** The copied nodes that are not inside another copied node: the ones that get "(2)" and move over. */
+  roots: string[];
+}
+
+/**
+ * Snapshot nodes for pasting. A copied folder brings everything inside it along.
+ * `positions` gives where the top-level nodes are drawn right now, since nodes without a saved
+ * position are laid out automatically and the copy needs a real spot to be moved from.
+ */
+export function copyNodes(spec: ProjectSpec, ids: string[], positions: Record<string, XY> = {}): Clipboard {
+  const byId = new Map(spec.nodes.map((n) => [n.id, n] as const));
+  const set = new Set<string>();
+  for (const id of ids) {
+    if (!byId.has(id)) continue;
+    set.add(id);
+    for (const inner of folderDescendants(spec, id)) set.add(inner);
+  }
+  if (set.size === 0) throw new Error("nothing to copy");
+
+  const roots = [...set].filter((id) => !set.has(byId.get(id)!.folderId ?? ""));
+  const nodes = spec.nodes
+    .filter((n) => set.has(n.id))
+    .map((n) => {
+      const copy = structuredClone(n);
+      if (roots.includes(n.id) && positions[n.id]) copy.position = { ...positions[n.id]! };
+      return copy;
+    });
+  const edges = spec.edges.filter((e) => set.has(e.from) || set.has(e.to)).map((e) => structuredClone(e));
+  return { nodes, edges, roots };
+}
+
+/** "Title" -> "Title (2)"; copying again gives "(3)", and copying a copy never stacks "(2) (2)". */
+function copyTitle(title: string, taken: Set<string>): string {
+  const base = title.replace(/ \(\d+\)$/, "");
+  let n = 2;
+  while (taken.has(`${base} (${n})`)) n++;
+  const next = `${base} (${n})`;
+  taken.add(next);
+  return next;
+}
+
+/**
+ * Add the copies. Top-level copies are moved by (dx, dy), get a "(n)" title and stay in the same
+ * folder as the originals. Lines come along: a copy gets the same lines as its original, pointing
+ * at the same other nodes (or at their copies when those were copied too). The one exception is
+ * "contains": a copied parent does not also adopt children that were not copied, because a node
+ * can have only one parent.
+ */
+export function pasteNodes(
+  spec: ProjectSpec,
+  clip: Clipboard,
+  opts: { dx?: number; dy?: number } = {},
+): { spec: ProjectSpec; ids: string[] } {
+  const dx = opts.dx ?? 0;
+  const dy = opts.dy ?? 0;
+  const draft = structuredClone(spec);
+  const takenIds = new Set(draft.nodes.map((n) => n.id));
+  const takenTitles = new Set(draft.nodes.map((n) => n.title));
+  const idMap = new Map<string, string>();
+
+  for (const n of clip.nodes) {
+    const base = n.id.replace(/-\d+$/, "") || n.type;
+    let i = 1;
+    while (takenIds.has(`${base}-${i}`)) i++;
+    const id = `${base}-${i}`;
+    takenIds.add(id);
+    idMap.set(n.id, id);
+  }
+
+  const roots = new Set(clip.roots);
+  for (const n of clip.nodes) {
+    const copy = structuredClone(n);
+    copy.id = idMap.get(n.id)!;
+    delete copy.external; // links to Figma, GitHub and so on belong to the original
+    if (roots.has(n.id)) {
+      copy.title = copyTitle(n.title, takenTitles);
+      if (copy.position) copy.position = { x: copy.position.x + dx, y: copy.position.y + dy };
+      if (copy.folderId && !spec.nodes.some((x) => x.id === copy.folderId)) delete copy.folderId;
+    } else if (copy.folderId) {
+      copy.folderId = idMap.get(copy.folderId);
+    }
+    draft.nodes.push(copy);
+  }
+
+  for (const e of clip.edges) {
+    const fromCopied = idMap.has(e.from);
+    const toCopied = idMap.has(e.to);
+    const from = idMap.get(e.from) ?? e.from;
+    const to = idMap.get(e.to) ?? e.to;
+    if (!fromCopied && !spec.nodes.some((n) => n.id === e.from)) continue; // the other end is gone
+    if (!toCopied && !spec.nodes.some((n) => n.id === e.to)) continue;
+    if (e.kind === "contains" && fromCopied && !toCopied) continue; // would give that child a second parent
+    draft.edges.push({ from, to, kind: e.kind, ...(e.label ? { label: e.label } : {}) });
+  }
+
+  return { spec: parseSpec(draft), ids: clip.roots.map((id) => idMap.get(id)!) };
 }

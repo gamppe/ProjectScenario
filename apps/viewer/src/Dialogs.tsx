@@ -116,8 +116,14 @@ export function PreviewDialog(props: { spec: ProjectSpec; onCopied: (ok: boolean
   );
 }
 
-export function McpDialog(props: { onCopied: (ok: boolean) => void; onClose: () => void }) {
+export function McpDialog(props: {
+  /** What is open right now: only a live file has a full path the page can know. */
+  source: { kind: string; name: string } | null;
+  onCopied: (ok: boolean) => void;
+  onClose: () => void;
+}) {
   const [info, setInfo] = useState<{ file: string; mcp: string } | null>(null);
+  const [typedPath, setTypedPath] = useState("");
   useEffect(() => {
     fetch("/api/info")
       .then((r) => (r.ok ? r.json() : null))
@@ -126,7 +132,10 @@ export function McpDialog(props: { onCopied: (ok: boolean) => void; onClose: () 
   }, []);
 
   const mcp = info?.mcp ?? "<ProjectScenario 폴더>\\packages\\mcp\\dist\\index.js";
-  const file = info?.file ?? "<project.json 경로>";
+  // A file picked in the browser only reveals its name, never its folder, so the path is typed in.
+  const live = props.source?.kind === "live";
+  const shownName = props.source?.name ?? "project.json";
+  const file = live ? (info?.file ?? props.source!.name) : typedPath.trim() || `<${shownName}의 전체 경로>`;
   const cli = `claude mcp add scenario -- node "${mcp}" --file "${file}"`;
   const json = JSON.stringify({ mcpServers: { scenario: { command: "node", args: [mcp, "--file", file] } } }, null, 2);
 
@@ -136,7 +145,24 @@ export function McpDialog(props: { onCopied: (ok: boolean) => void; onClose: () 
         에이전트는 MCP로 이 프로젝트 파일을 직접 읽고 씁니다. 에이전트가 바꾼 내용은 이 화면에 바로 반영되고,
         AI가 정한 값에는 <b>AI 표시</b>가 남아 나중에 검토할 수 있습니다.
       </p>
-      {!info && <p className="muted">프로젝트 파일 경로를 알 수 없어 자리표시자로 표시합니다. <code>view.cmd 경로\project.json</code>으로 실행하면 실제 경로가 채워집니다.</p>}
+      {live ? (
+        <p className="muted">지금 열린 파일: <code>{file}</code></p>
+      ) : (
+        <>
+          <p className="muted">
+            <b>{shownName}</b>은(는) 브라우저로 연 파일이라 폴더 위치를 알 수 없습니다. 아래에 전체 경로를 붙여 넣으면 명령에 반영됩니다.
+            (에이전트와 실시간으로 같이 쓰려면 <code>view.cmd 경로\project.json</code>으로 실행하세요.)
+          </p>
+          <input
+            className="path-input"
+            value={typedPath}
+            onChange={(e) => setTypedPath(e.target.value)}
+            placeholder={`예: C:\\Users\\내이름\\project\\${shownName}`}
+            aria-label="프로젝트 파일 전체 경로"
+            style={{ width: "100%", boxSizing: "border-box", padding: "6px 8px", margin: "4px 0 8px" }}
+          />
+        </>
+      )}
       <CopyBlock label="Claude Code" text={cli} onCopied={props.onCopied} />
       <CopyBlock label="다른 MCP 클라이언트 (설정 JSON)" text={json} onCopied={props.onCopied} />
       <CopyBlock label="에이전트에게 처음 보낼 말" text={AGENT_PROMPT} onCopied={props.onCopied} />

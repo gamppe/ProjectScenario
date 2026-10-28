@@ -8,3 +8,5 @@ export * from "./completeness.js";
 export * from "./ops.js";
 export * from "./exporter.js";
 export * from "./summary.js";
+export * from "./labels.js";
+export * from "./diagram.js";

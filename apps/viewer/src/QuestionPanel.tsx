@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Bot, Check, SkipForward } from "lucide-react";
 import {
+  QUESTION_BANK,
   STAGES,
   answerQuestion,
   coerceValue,
@@ -11,17 +12,13 @@ import {
   type ProjectSpec,
   type Question,
 } from "@scenario/core";
+import { valueText } from "./format";
 import { describeError } from "./project";
 
 export type QuestionTab = "next" | "skipped" | "review";
 
 const IMPORTANCE: Record<string, string> = { P0: "필수", P1: "권장", P2: "선택" };
 
-export function valueText(v: AnswerValue | undefined): string {
-  if (v === undefined) return "";
-  if (typeof v === "boolean") return v ? "예" : "아니오";
-  return Array.isArray(v) ? v.join(", ") : v;
-}
 
 /** Input matching the question kind. Returns the raw text that coerceValue understands. */
 function AnswerForm(props: {
@@ -129,9 +126,17 @@ export function QuestionPanel(props: {
   setTab: (t: QuestionTab) => void;
   apply: (fn: (s: ProjectSpec) => ProjectSpec) => boolean;
   questionOf: (id: string) => Question | undefined;
+  /** A single question picked from the sidebar list; shown instead of the tab content. */
+  focusId: string | null;
+  onFocus: (id: string | null) => void;
   onClose: () => void;
 }) {
-  const { spec, tab, setTab, apply, questionOf } = props;
+  const { spec, tab, apply, questionOf, focusId, onFocus } = props;
+  const setTab = (t: QuestionTab) => {
+    onFocus(null);
+    props.setTab(t);
+  };
+  const t = focusId ? "focus" : tab;
   const [p0Only, setP0Only] = useState(true);
   const [stage, setStage] = useState("");
   const [confirmSkip, setConfirmSkip] = useState<string | null>(null);
@@ -155,23 +160,67 @@ export function QuestionPanel(props: {
 
   const current = open[0];
 
+  const focusQ = focusId ? questionOf(focusId) : undefined;
+  const focusA = focusQ ? spec.answers.find((a) => a.questionId === focusQ.id) : undefined;
+  const nextOpen = (() => {
+    if (!focusQ) return undefined;
+    const all = openQuestions(spec).filter((q) => q.id !== focusQ.id);
+    const at = QUESTION_BANK.findIndex((q) => q.id === focusQ.id);
+    return all.find((q) => QUESTION_BANK.indexOf(q) > at) ?? all[0];
+  })();
+
   return (
     <aside className="side-panel qpanel">
       <button className="close" onClick={props.onClose} aria-label="닫기">×</button>
       <h2>기획 질문</h2>
       <div className="tabs">
-        <button className={tab === "next" ? "on" : ""} onClick={() => setTab("next")}>
+        <button className={t === "next" ? "on" : ""} onClick={() => setTab("next")}>
           진행 <b>{open.length}</b>
         </button>
-        <button className={tab === "skipped" ? "on" : ""} onClick={() => setTab("skipped")}>
+        <button className={t === "skipped" ? "on" : ""} onClick={() => setTab("skipped")}>
           건너뜀 <b>{skipped.length}</b>
         </button>
-        <button className={tab === "review" ? "on" : ""} onClick={() => setTab("review")}>
+        <button className={t === "review" ? "on" : ""} onClick={() => setTab("review")}>
           AI 검토 <b>{review.length}</b>
         </button>
       </div>
 
-      {tab === "next" && (
+      {t === "focus" && focusQ && (
+        <div className="qcard" key={focusQ.id}>
+          <QuestionMeta q={focusQ} />
+          {focusA?.state === "ai_decided" && !focusA.provenance.reviewed && (
+            <div className="ai-answer">
+              <span className="ai-badge unreviewed"><Bot size={11} /> AI</span> 에이전트가 정한 값입니다.
+              {focusA.provenance.rationale && <div className="muted">근거: {focusA.provenance.rationale}</div>}
+              <button className="btn" onClick={() => apply((s) => markReviewed(s, focusQ.id))}>
+                <Check size={14} /> 그대로 승인
+              </button>
+            </div>
+          )}
+          {focusA?.state === "skipped" && (
+            <div className="muted">건너뛴 질문입니다. 에이전트가 판단하도록 기다리는 중이며, 직접 답할 수도 있습니다.</div>
+          )}
+          <AnswerForm
+            key={`${focusQ.id}:${focusA?.state}:${JSON.stringify(focusA?.value)}`}
+            q={focusQ}
+            initial={focusA?.value}
+            submitLabel={focusA?.value !== undefined ? "수정 저장" : "답변 저장"}
+            onSubmit={answer(focusQ)}
+            extra={
+              !focusA ? (
+                <button className="btn" onClick={() => apply((s) => skipQuestion(s, focusQ.id))}>
+                  <SkipForward size={14} /> 건너뛰기
+                </button>
+              ) : undefined
+            }
+          />
+          <button className="btn" disabled={!nextOpen} onClick={() => nextOpen && onFocus(nextOpen.id)}>
+            다음 미답변 질문 →
+          </button>
+        </div>
+      )}
+
+      {t === "next" && (
         <>
           <div className="filters">
             <label className="check">
@@ -224,7 +273,7 @@ export function QuestionPanel(props: {
         </>
       )}
 
-      {tab === "skipped" && (
+      {t === "skipped" && (
         <>
           <p className="muted">건너뛴 질문입니다. AI 에이전트가 판단하도록 기다리고 있고, 직접 답할 수도 있습니다.</p>
           {skipped.length === 0 && <p className="muted">없음</p>}
@@ -245,7 +294,7 @@ export function QuestionPanel(props: {
         </>
       )}
 
-      {tab === "review" && (
+      {t === "review" && (
         <>
           <p className="muted">에이전트가 대신 정한 값입니다. 그대로 받아들이거나 직접 고치세요.</p>
           {review.length === 0 && <p className="muted">검토할 항목이 없습니다.</p>}

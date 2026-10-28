@@ -17,8 +17,10 @@ const NodeBase = z.object({
   /** Absent means the user wrote it. */
   provenance: ProvenanceSchema.optional(),
   external: ExternalRefsSchema.optional(),
-  /** Diagram position, owned by the GUI. */
+  /** Diagram position, owned by the GUI. Always absolute, even for nodes inside a folder. */
   position: PositionSchema.optional(),
+  /** The folder this node is kept in. Purely organizational; unrelated to "contains" edges. */
+  folderId: IdSchema.optional(),
   tags: z.array(z.string()).default([]),
 });
 
@@ -112,6 +114,16 @@ export const RiskNodeSchema = NodeBase.extend({
   mitigation: z.string().optional(),
 });
 
+/**
+ * A box that keeps other nodes together, like a package. On the diagram it lists its
+ * members as pills; double-clicking it opens a diagram of just its contents.
+ * (`size` is from an earlier version where the box was resized by hand; it is ignored.)
+ */
+export const FolderNodeSchema = NodeBase.extend({
+  type: z.literal("folder"),
+  size: z.object({ width: z.number().min(120), height: z.number().min(80) }).optional(),
+});
+
 export const NodeSchema = z.discriminatedUnion("type", [
   VisionNodeSchema,
   PersonaNodeSchema,
@@ -124,6 +136,7 @@ export const NodeSchema = z.discriminatedUnion("type", [
   DecisionNodeSchema,
   TaskNodeSchema,
   RiskNodeSchema,
+  FolderNodeSchema,
 ]);
 export type Node = z.infer<typeof NodeSchema>;
 export type NodeType = Node["type"];
@@ -140,10 +153,22 @@ export const EDGE_KINDS = [
 export const EdgeKindSchema = z.enum(EDGE_KINDS);
 export type EdgeKind = z.infer<typeof EdgeKindSchema>;
 
+export const SIDES = ["left", "right", "top", "bottom"] as const;
+export type Side = (typeof SIDES)[number];
+
+/** Where a line attaches to a node: a side, and how far along it (0..1). */
+export const AnchorSchema = z.object({
+  side: z.enum(SIDES),
+  offset: z.number().min(0).max(1),
+});
+
 export const EdgeSchema = z.object({
   from: IdSchema,
   to: IdSchema,
   kind: EdgeKindSchema,
   label: z.string().optional(),
+  /** Set when the user drags the line's end elsewhere; otherwise the position is chosen automatically. */
+  fromAnchor: AnchorSchema.optional(),
+  toAnchor: AnchorSchema.optional(),
 });
 export type Edge = z.infer<typeof EdgeSchema>;
