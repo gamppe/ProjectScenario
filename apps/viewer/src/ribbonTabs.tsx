@@ -19,6 +19,7 @@ import {
   FilePlus,
   FlaskConical,
   FolderOpen,
+  FolderTree,
   FolderUp,
   Frame,
   House,
@@ -94,6 +95,7 @@ export interface RibbonCtx {
     openQuestions(t: QuestionTab): void;
     setTheme(t: Theme): void;
     tidy(): void;
+    groupByKind(): void;
     zoomIn(): void;
     zoomOut(): void;
     fit(): void;
@@ -392,7 +394,15 @@ export function buildTabs(c: RibbonCtx): RibbonTab[] {
               icon: <LayoutGrid size={28} />,
               onClick: a.tidy,
               disabled: noProject,
-              title: "지금 보는 화면의 노드를 트리 모양으로 다시 배치합니다",
+              title: "지금 보는 화면의 노드를 종류별 열로 다시 배치합니다 (기능, 화면, 작업 …)",
+            },
+            {
+              id: "group-kind",
+              label: "종류별 폴더",
+              icon: <FolderTree size={28} />,
+              onClick: a.groupByKind,
+              disabled: noProject,
+              title: "지금 보는 화면에 흩어진 노드를 종류별 폴더(기능, 화면, 작업 …)로 묶습니다. 종류마다 3개 이상일 때 묶어요",
             },
           ],
         },

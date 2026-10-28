@@ -118,11 +118,30 @@ export interface LevelLayout {
   members: Record<string, string[]>;
 }
 
-/** Where everything at a level sits. Saved positions win; the rest is a left-to-right tree. */
+/**
+ * Columns of the automatic layout, left to right. A node goes in the column of its kind, so a
+ * glance tells what is what: goal and users, then features and requirements, screens, data,
+ * decisions, tasks, risks. Empty columns are skipped.
+ */
+export const LAYOUT_COLUMNS: readonly (readonly string[])[] = [
+  ["vision", "persona"],
+  ["feature", "story"],
+  ["screen", "interaction", "flow"],
+  ["entity"],
+  ["decision"],
+  ["task"],
+  ["risk"],
+];
+
+/**
+ * Where everything at a level sits. Saved positions win; the rest is laid out in columns by kind.
+ * Inside a column things follow the lines that give an order (a screen before the screen it leads to,
+ * a task after the task it needs); otherwise they keep file order. A folder stands in the column
+ * of what it mostly holds.
+ */
 export function layoutLevel(spec: ProjectSpec, view: string | null): LevelLayout {
   const nodes = childrenOf(spec, view);
   const ids = nodes.map((n) => n.id);
-  const visible = new Set(ids);
   const size: Record<string, Size> = {};
   const members: Record<string, string[]> = {};
 
@@ -135,42 +154,47 @@ export function layoutLevel(spec: ProjectSpec, view: string | null): LevelLayout
     }
   }
 
-  const kids = new Map<string, string[]>();
-  const hasParent = new Set<string>();
+  const columnOfType = (type: string) => Math.max(0, LAYOUT_COLUMNS.findIndex((c) => c.includes(type)));
+  const column = (id: string): number => {
+    const n = nodes.find((x) => x.id === id)!;
+    if (n.type !== "folder") return columnOfType(n.type);
+    // the kind most of its members are, so a folder of screens sits with the screens
+    const count = new Map<number, number>();
+    for (const m of spec.nodes) if (m.folderId === id && m.type !== "folder") count.set(columnOfType(m.type), (count.get(columnOfType(m.type)) ?? 0) + 1);
+    let best = 0;
+    let bestN = 0;
+    for (const [c, k] of count) if (k > bestN || (k === bestN && c < best)) [best, bestN] = [c, k];
+    return best;
+  };
+
+  const col = new Map(ids.map((id) => [id, column(id)] as const));
+  const used = [...new Set(col.values())].sort((x, y) => x - y);
+
+  // "A must come before B" within one column, from lines that carry an order
+  const before = new Map<string, Set<string>>(ids.map((id) => [id, new Set<string>()]));
   for (const e of levelEdges(spec, view)) {
-    if (e.kind !== "contains" || !visible.has(e.from) || !visible.has(e.to) || hasParent.has(e.to)) continue;
-    kids.set(e.from, [...(kids.get(e.from) ?? []), e.to]);
-    hasParent.add(e.to);
+    if (col.get(e.from) !== col.get(e.to)) continue;
+    if (e.kind === "navigates") before.get(e.to)?.add(e.from);
+    else if (e.kind === "depends_on") before.get(e.from)?.add(e.to);
   }
 
   const pos: Record<string, XY> = {};
-  const done = new Set<string>();
-  let cursor = 0;
-
-  /** Returns the vertical center of what it placed, so a parent can sit between its children. */
-  const place = (id: string, depth: number): number => {
-    done.add(id);
-    const h = size[id]!.height;
-    const children = (kids.get(id) ?? []).filter((k) => !done.has(k));
-    let top: number;
-    if (children.length === 0) {
-      top = cursor;
-      cursor += h + ROW_GAP;
-    } else {
-      const centers = children.map((k) => place(k, depth + 1));
-      top = (centers[0]! + centers[centers.length - 1]!) / 2 - h / 2;
+  used.forEach((c, i) => {
+    const inCol = ids.filter((id) => col.get(id) === c);
+    const ordered: string[] = [];
+    const placed = new Set<string>();
+    while (ordered.length < inCol.length) {
+      const ready = inCol.find((id) => !placed.has(id) && [...before.get(id)!].every((p) => placed.has(p) || !inCol.includes(p)));
+      const pick = ready ?? inCol.find((id) => !placed.has(id))!; // a cycle: fall back to file order
+      placed.add(pick);
+      ordered.push(pick);
     }
-    pos[id] = { x: depth * COL_STEP, y: top };
-    return top + h / 2;
-  };
-
-  for (const id of ids) {
-    if (!hasParent.has(id) && !done.has(id)) {
-      place(id, 0);
-      cursor += ROW_GAP;
+    let y = 0;
+    for (const id of ordered) {
+      pos[id] = { x: i * COL_STEP, y };
+      y += size[id]!.height + ROW_GAP;
     }
-  }
-  for (const id of ids) if (!done.has(id)) place(id, 0); // only reachable through a cycle
+  });
 
   for (const n of nodes) if (n.position) pos[n.id] = n.position;
   return { ids, pos, size, members };

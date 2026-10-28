@@ -21,6 +21,7 @@ import {
   alignNodes,
   anchorPoint,
   clearPositions,
+  groupByKind,
   copyNodes,
   computeCompleteness,
   computeRollup,
@@ -361,6 +362,21 @@ function Workspace() {
     if (!spec) return;
     setDrag({});
     apply((s0) => clearPositions(s0, view));
+    setTimeout(() => flow.fitView({ padding: 0.2 }), 60);
+  };
+
+  /** Put loose nodes of this level into one folder per kind, then lay the level out again. */
+  const groupKinds = () => {
+    if (!spec) return;
+    const folders = (sp: typeof spec) => sp.nodes.filter((n) => n.type === "folder").length;
+    let made = 0;
+    setDrag({});
+    apply((s0) => {
+      const next = clearPositions(groupByKind(s0, { level: view }), view);
+      made = folders(next) - folders(s0);
+      return next;
+    });
+    p.tell(made > 0 ? `종류별 폴더 ${made}개를 만들었습니다.` : "묶을 노드가 없습니다. (한 종류가 3개 이상일 때 묶습니다)");
     setTimeout(() => flow.fitView({ padding: 0.2 }), 60);
   };
 
@@ -873,6 +889,7 @@ function Workspace() {
       openQuestions: openQuestionsPanel,
       setTheme: setThemeState,
       tidy,
+      groupByKind: groupKinds,
       zoomIn: () => void flow.zoomIn(),
       zoomOut: () => void flow.zoomOut(),
       fit: () => void flow.fitView({ padding: 0.2 }),

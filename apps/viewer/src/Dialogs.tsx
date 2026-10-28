@@ -6,7 +6,7 @@ export const AGENT_PROMPT = `ProjectScenario MCP 서버(scenario)를 사용해�
 1. next_steps를 먼저 호출해서 비어 있는 항목을 확인해.
 2. 필수(P0) 질문은 내게 한국어로 직접 물어보고, 내가 답한 내용만 record_user_answer로 저장해. 내 답을 지어내지 마.
 3. 내가 건너뛰라고 하거나 알아서 정하라고 한 항목만 skip_question → decide_question(근거 한 줄 포함)으로 채워.
-4. 답이 쌓이면 add_node / link_nodes로 화면, 기능, 작업을 만들어 구조화해.
+4. 답이 쌓이면 add_node / link_nodes로 화면, 기능, 작업을 만들어 구조화해. 같은 종류가 여러 개면 폴더(folder)로 묶어서(또는 group_by_kind 호출) 한 화면에 12개 넘게 흩어지지 않게 해.
 5. 마지막에 export_markdown을 호출하고, 아직 비어 있거나 AI가 판단한 항목을 요약해줘.`;
 
 export async function copyText(text: string): Promise<boolean> {

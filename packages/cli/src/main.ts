@@ -9,6 +9,7 @@ import {
   STATUSES,
   addEdge,
   addNode,
+  groupByKind,
   aiDecide,
   answerQuestion,
   coerceValue,
@@ -66,6 +67,7 @@ Graph
   add <type> <id> <title> [--parent <id>] [--data '<json>']
   link <from> <to> <kind> [--label <text>]
   rm <id>
+  group [--min <n>]               put loose nodes into one folder per kind (default: 3 or more of a kind)
 
 Output
   export [--out <dir>]            write AGENTS.md PRD.md SCREENS.md FLOWS.md TASKS.md
@@ -82,6 +84,7 @@ const OPTIONS = {
   stage: { type: "string" },
   state: { type: "string" },
   parent: { type: "string" },
+  min: { type: "string" },
   data: { type: "string" },
   label: { type: "string" },
   out: { type: "string" },
@@ -286,6 +289,16 @@ export async function run(argv: string[], io: Io): Promise<number> {
       }
       mutate((s) => addNode(s, { ...extra, id, type, title }, { parentId: values.parent }));
       out(`added ${type} ${id}`);
+      return 0;
+    }
+
+    case "group": {
+      const min = values.min === undefined ? 3 : Number(values.min);
+      if (!Number.isInteger(min) || min < 1) throw new CliError("--min must be a whole number, 1 or more");
+      const count = (sp: ProjectSpec) => sp.nodes.filter((n) => n.type === "folder").length;
+      const before = count(loadSpec(file));
+      const next = mutate((sp) => groupByKind(sp, { min }));
+      out(`grouped into ${count(next) - before} new folder(s)`);
       return 0;
     }
 

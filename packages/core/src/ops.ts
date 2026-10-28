@@ -9,6 +9,7 @@ import {
   type Question,
 } from "./questions.js";
 import type { XY } from "./diagram.js";
+import { NODE_LABELS } from "./labels.js";
 import { parseSpec, type ProjectSpec } from "./spec.js";
 
 /**
@@ -493,4 +494,33 @@ export function pasteNodes(
   }
 
   return { spec: parseSpec(draft), ids: clip.roots.map((id) => idMap.get(id)!) };
+}
+
+/**
+ * Gather the loose nodes of one diagram level into a folder per kind ("기능", "화면", "작업", ...),
+ * for every kind that has at least `min` loose nodes there. Kinds with fewer stay where they are;
+ * an existing `folder-<kind>` is reused and takes any number. Lines are untouched: a line to a node inside a folder
+ * is drawn to the folder. Nodes that move lose their saved position (the new level lays them out).
+ */
+export function groupByKind(spec: ProjectSpec, opts: { level?: string | null; min?: number } = {}): ProjectSpec {
+  const level = opts.level ?? null;
+  const min = opts.min ?? 3;
+  return change(spec, (d) => {
+    const loose = d.nodes.filter((n) => (n.folderId ?? null) === level && n.type !== "folder");
+    const kinds = [...new Set(loose.map((n) => n.type))];
+    for (const kind of kinds) {
+      const members = loose.filter((n) => n.type === kind);
+      const id = `folder-${kind}`;
+      const existing = d.nodes.find((n) => n.id === id);
+      if (existing && existing.type !== "folder") continue;
+      if (!existing && members.length < min) continue; // a kind that already has its folder takes any number
+      if (!existing) {
+        d.nodes.push(NodeSchema.parse({ id, type: "folder", title: NODE_LABELS[kind], ...(level ? { folderId: level } : {}) }));
+      }
+      for (const n of members) {
+        n.folderId = id;
+        delete n.position;
+      }
+    }
+  });
 }

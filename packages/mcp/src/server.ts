@@ -8,6 +8,7 @@ import {
   STATUSES,
   addEdge,
   addNode,
+  groupByKind,
   aiDecide,
   answerQuestion,
   coerceValue,
@@ -38,6 +39,7 @@ How to use it well:
 - If the user says to skip or decide for them, call skip_question, then decide_question with a short rationale. Decisions made this way are permanently marked AI-decided until the user reviews them.
 - decide_question only works on skipped or open questions; you cannot overwrite what the user answered.
 - After answers exist, model them: add_node / link_nodes (screens, features, tasks, ...). next_steps reports answers that have no matching nodes yet.
+- Keep the diagram readable: when a project has many nodes of one kind, put them in a folder per kind (add a folder node and give members {"folderId"} in fields), or call group_by_kind once the model exists. Aim for at most about 12 things loose on one level.
 - Keep statuses current with update_status while implementing: planned, in_progress, blocked, done.
 - Finish with export_markdown to produce AGENTS.md, PRD.md, SCREENS.md, FLOWS.md and TASKS.md.`;
 
@@ -286,6 +288,18 @@ export function createServer(store: Store): McpServer {
   );
 
   tool(
+    "group_by_kind",
+    "Tidy the diagram: put loose nodes of the same kind (features, screens, tasks, ...) into one folder per kind, for every kind that has at least min_per_kind of them (default 3). Folders that already exist are reused; lines are kept. Call it after building the model, or whenever one level gets crowded.",
+    { min_per_kind: z.number().int().min(1).default(3) },
+    ({ min_per_kind }) => {
+      const before = store.load().nodes.filter((n) => n.type === "folder").map((n) => n.id);
+      mutate((s) => groupByKind(s, { min: min_per_kind }));
+      const after = store.load().nodes.filter((n) => n.type === "folder").map((n) => n.id);
+      return { newFolders: after.filter((id) => !before.includes(id)) };
+    },
+  );
+
+  tool(
     "link_nodes",
     `Connect two nodes. kind: ${EDGE_KINDS.join(", ")}. contains = parent->child (drives status roll-up), navigates = screen->screen, implements = task->feature/story, depends_on = needs the target first.`,
     { from: z.string(), to: z.string(), kind: z.enum(EDGE_KINDS), label: z.string().optional() },
@@ -360,7 +374,7 @@ export function createServer(store: Store): McpServer {
               "1. Call init_project if there is no project yet, then next_steps.",
               "2. Interview me stage by stage. Ask the required (P0) questions from next_steps in small groups, in Korean, using the prompts as written. Wait for my answers and store them with record_user_answer. Do not answer for me.",
               "3. If I say to skip or to decide for me, use skip_question then decide_question with a one-sentence rationale.",
-              "4. When answers exist, build the model: add_node and link_nodes for screens, features, tasks and so on. Check next_steps for modelingGaps.",
+              "4. When answers exist, build the model: add_node and link_nodes for screens, features, tasks and so on. Check next_steps for modelingGaps. Keep it readable: create a folder per kind (or call group_by_kind at the end) instead of leaving dozens of nodes loose.",
               "5. Call export_markdown and summarize what is still open or AI-decided so I can review it.",
             ].join("\n"),
           },

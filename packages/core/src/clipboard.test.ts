@@ -11,6 +11,7 @@ import {
   setPosition,
   type ProjectSpec,
   type Rect,
+  groupByKind,
 } from "./index.js";
 
 const sample = (): ProjectSpec => {
@@ -189,5 +190,33 @@ describe("aligning nodes", () => {
     expect(alignNodes(rects, ["a", "b"], "distribute-h")).toEqual({});
     expect(Object.keys(alignNodes(rects, ["a", "b"], "top"))).toHaveLength(2);
     expect(alignNodes(rects, ["a", "nope"], "left")).toEqual({});
+  });
+});
+
+describe("groupByKind", () => {
+  const many = () => {
+    let s = createSpec("T");
+    for (const id of ["f1", "f2", "f3"]) s = addNode(s, { id, type: "feature", title: id });
+    for (const id of ["s1", "s2"]) s = addNode(s, { id, type: "screen", title: id });
+    s = addEdge(s, { from: "s1", to: "f1", kind: "relates" });
+    return s;
+  };
+
+  it("makes a folder for each kind that has enough nodes and leaves the rest", () => {
+    const s = groupByKind(many());
+    const folder = s.nodes.find((n) => n.id === "folder-feature");
+    expect(folder?.type).toBe("folder");
+    expect(["f1", "f2", "f3"].every((id) => s.nodes.find((n) => n.id === id)?.folderId === "folder-feature")).toBe(true);
+    expect(s.nodes.find((n) => n.id === "s1")?.folderId).toBeUndefined(); // only two screens
+    expect(s.edges).toHaveLength(1);
+  });
+
+  it("honors min, reuses an existing folder and does not nest it twice", () => {
+    let s = groupByKind(many(), { min: 2 });
+    expect(s.nodes.filter((n) => n.type === "folder").map((n) => n.id).sort()).toEqual(["folder-feature", "folder-screen"]);
+    s = addNode(s, { id: "f4", type: "feature", title: "f4" });
+    s = groupByKind(s, { min: 2 });
+    expect(s.nodes.filter((n) => n.type === "folder")).toHaveLength(2);
+    expect(s.nodes.find((n) => n.id === "f4")?.folderId).toBe("folder-feature");
   });
 });

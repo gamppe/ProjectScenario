@@ -128,8 +128,59 @@ describe("layoutLevel", () => {
 
   it("does not stack two nodes on top of each other", () => {
     const l = layoutLevel(sample(), null);
-    const rows = l.ids.map((id) => ({ y: l.pos[id]!.y, h: l.size[id]!.height })).sort((a, b) => a.y - b.y);
-    for (let i = 1; i < rows.length; i++) expect(rows[i]!.y).toBeGreaterThanOrEqual(rows[i - 1]!.y + rows[i - 1]!.h);
+    const columns = new Map<number, { y: number; h: number }[]>();
+    for (const id of l.ids) columns.set(l.pos[id]!.x, [...(columns.get(l.pos[id]!.x) ?? []), { y: l.pos[id]!.y, h: l.size[id]!.height }]);
+    for (const rows of columns.values()) {
+      rows.sort((p, q) => p.y - q.y);
+      for (let i = 1; i < rows.length; i++) expect(rows[i]!.y).toBeGreaterThanOrEqual(rows[i - 1]!.y + rows[i - 1]!.h);
+    }
+  });
+
+  it("puts each kind in its own column, left to right, and skips empty columns", () => {
+    let s = createSpec("T");
+    s = addNode(s, { id: "task-1", type: "task", title: "T" });
+    s = addNode(s, { id: "scr-1", type: "screen", title: "S" });
+    s = addNode(s, { id: "feat-1", type: "feature", title: "F" });
+    s = addNode(s, { id: "feat-2", type: "feature", title: "F2" });
+    const l = layoutLevel(s, null);
+    expect(l.pos["feat-1"]!.x).toBe(0);
+    expect(l.pos["feat-2"]!.x).toBe(0);
+    expect(l.pos["scr-1"]!.x).toBeGreaterThan(0);
+    expect(l.pos["task-1"]!.x).toBeGreaterThan(l.pos["scr-1"]!.x);
+    expect(l.pos["feat-2"]!.y).toBeGreaterThan(l.pos["feat-1"]!.y);
+  });
+
+  it("orders a column by the lines that carry an order", () => {
+    let s = createSpec("T");
+    for (const id of ["scr-c", "scr-b", "scr-a"]) s = addNode(s, { id, type: "screen", title: id });
+    s = addNode(s, { id: "task-2", type: "task", title: "2" });
+    s = addNode(s, { id: "task-1", type: "task", title: "1" });
+    s = addEdge(s, { from: "scr-a", to: "scr-b", kind: "navigates" });
+    s = addEdge(s, { from: "scr-b", to: "scr-c", kind: "navigates" });
+    s = addEdge(s, { from: "task-2", to: "task-1", kind: "depends_on" });
+    const l = layoutLevel(s, null);
+    expect(l.pos["scr-a"]!.y).toBeLessThan(l.pos["scr-b"]!.y);
+    expect(l.pos["scr-b"]!.y).toBeLessThan(l.pos["scr-c"]!.y);
+    expect(l.pos["task-1"]!.y).toBeLessThan(l.pos["task-2"]!.y); // task-2 needs task-1 first
+  });
+
+  it("does not hang on a cycle", () => {
+    let s = createSpec("T");
+    s = addNode(s, { id: "scr-a", type: "screen", title: "A" });
+    s = addNode(s, { id: "scr-b", type: "screen", title: "B" });
+    s = addEdge(s, { from: "scr-a", to: "scr-b", kind: "navigates" });
+    s = addEdge(s, { from: "scr-b", to: "scr-a", kind: "navigates" });
+    expect(Object.keys(layoutLevel(s, null).pos)).toHaveLength(2);
+  });
+
+  it("puts a folder in the column of what it mostly holds", () => {
+    let s = createSpec("T");
+    s = addNode(s, { id: "feat-1", type: "feature", title: "F" });
+    s = addNode(s, { id: "folder-s", type: "folder", title: "Screens" });
+    s = addNode(s, { id: "scr-1", type: "screen", title: "S" });
+    s = setFolder(s, "scr-1", "folder-s");
+    const l = layoutLevel(s, null);
+    expect(l.pos["folder-s"]!.x).toBeGreaterThan(l.pos["feat-1"]!.x);
   });
 
   it("finds the folder under a point, ignoring what is excluded", () => {
